@@ -8,6 +8,8 @@ export interface ImageAsset {
   imageDataUrl: string;
   width: number;
   height: number;
+  x?: number;
+  y?: number;
   createdAt: string;
 }
 

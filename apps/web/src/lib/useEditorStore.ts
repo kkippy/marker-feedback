@@ -3,13 +3,15 @@ import { createId, type Annotation, type AnnotationTool, type Comment, type Edit
 
 const cloneDraft = (draft: EditorDraft): EditorDraft => JSON.parse(JSON.stringify(draft));
 const now = () => new Date().toISOString();
+const MAX_ZOOM = 6;
 export const createEmptyDraft = (): EditorDraft => ({ id: createId('draft'), asset: null, annotations: [], threads: [], updatedAt: now() });
 type DraftMutator = (draft: EditorDraft) => void;
 
 interface EditorState {
   draft: EditorDraft; history: EditorDraft[]; future: EditorDraft[]; activeTool: AnnotationTool; selectedAnnotationId: string | null; zoom: number;
   setDraft: (draft: EditorDraft) => void; resetDraft: () => void; setAsset: (asset: ImageAsset) => void; setActiveTool: (tool: AnnotationTool) => void; setSelectedAnnotation: (annotationId: string | null) => void;
-  zoomIn: () => void; zoomOut: () => void; commitDraft: (mutator: DraftMutator) => void; addAnnotation: (annotation: Annotation) => void; updateAnnotation: (annotationId: string, mutator: (annotation: Annotation) => void) => void;
+  setAssetPosition: (x: number, y: number) => void;
+  setZoom: (zoom: number) => void; zoomIn: () => void; zoomOut: () => void; commitDraft: (mutator: DraftMutator) => void; addAnnotation: (annotation: Annotation) => void; updateAnnotation: (annotationId: string, mutator: (annotation: Annotation) => void) => void;
   createThreadComment: (body: string, annotationId: string | null) => void; replyToThread: (threadId: string, body: string, parentId?: string | null) => void; updateThreadStatus: (threadId: string, status: ThreadStatus) => void;
   undo: () => void; redo: () => void;
 }
@@ -23,7 +25,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setAsset: (asset) => set((state) => ({ ...pushHistory(state, { ...state.draft, asset, updatedAt: now() }) })),
   setActiveTool: (tool) => set({ activeTool: tool }),
   setSelectedAnnotation: (annotationId) => set({ selectedAnnotationId: annotationId }),
-  zoomIn: () => set((state) => ({ zoom: Math.min(2.5, Number((state.zoom + 0.1).toFixed(2))) })),
+  setAssetPosition: (x, y) => get().commitDraft((draft) => {
+    if (draft.asset) {
+      draft.asset.x = x;
+      draft.asset.y = y;
+    }
+  }),
+  setZoom: (zoom) => set({ zoom: Math.max(0.5, Math.min(MAX_ZOOM, Number(zoom.toFixed(2)))) }),
+  zoomIn: () => set((state) => ({ zoom: Math.min(MAX_ZOOM, Number((state.zoom + 0.1).toFixed(2))) })),
   zoomOut: () => set((state) => ({ zoom: Math.max(0.5, Number((state.zoom - 0.1).toFixed(2))) })),
   commitDraft: (mutator) => set((state) => { const nextDraft = cloneDraft(state.draft); mutator(nextDraft); nextDraft.updatedAt = now(); return pushHistory(state, nextDraft); }),
   addAnnotation: (annotation) => { get().commitDraft((draft) => { draft.annotations.push(annotation); }); set({ selectedAnnotationId: annotation.id }); },
