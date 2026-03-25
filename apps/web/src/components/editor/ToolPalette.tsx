@@ -1,0 +1,5 @@
+import type { AnnotationTool } from '@marker/shared';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+const tools: { tool: AnnotationTool; label: string }[] = [{ tool: 'select', label: 'Select' }, { tool: 'rectangle', label: 'Rect' }, { tool: 'arrow', label: 'Arrow' }, { tool: 'highlight', label: 'Highlight' }, { tool: 'text', label: 'Text' }, { tool: 'blur', label: 'Blur' }, { tool: 'marker', label: 'Marker' }];
+export function ToolPalette({ activeTool, onToolChange }: { activeTool: AnnotationTool; onToolChange: (tool: AnnotationTool) => void; }) { return <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-soft"><Badge className="border-blue-200 bg-blue-50 text-blue-700">Tools</Badge>{tools.map(({ tool, label }) => <Button key={tool} type="button" onClick={() => onToolChange(tool)} className={tool === activeTool ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}>{label}</Button>)}</div>; }

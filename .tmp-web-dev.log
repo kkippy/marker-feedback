@@ -1,0 +1,22 @@
+
+> @marker/web@0.1.0 dev
+> vite --host 127.0.0.1 --port 3100
+
+
+  [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m2853[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m3100[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+npm error Lifecycle script `dev` failed with error:
+npm error code 4294967295
+npm error path C:\Users\李文博\Desktop\testRepo\marker-feedback\apps\web
+npm error workspace @marker/web@0.1.0
+npm error location C:\Users\李文博\Desktop\testRepo\marker-feedback\apps\web
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c vite --host 127.0.0.1 --port 3100
+[2m13:40:50[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/routes/SharePage.tsx, /src/routes/EditorPage.tsx, /src/index.css[22m
+[2m13:44:19[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[2m14:13:18[22m [36m[1m[vite][22m[39m [32m.env changed, restarting server...[39m
+[2m14:13:18[22m [36m[1m[vite][22m[39m server restarted.
+[2m14:57:04[22m [36m[1m[vite][22m[39m [32m.env changed, restarting server...[39m
+[2m14:57:05[22m [36m[1m[vite][22m[39m server restarted.
