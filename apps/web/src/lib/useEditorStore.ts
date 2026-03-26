@@ -2,6 +2,7 @@
 import {
   createId,
   type Annotation,
+  type AnnotationStyle,
   type AnnotationTool,
   type Comment,
   type EditorDraft,
@@ -13,12 +14,21 @@ import {
 const cloneDraft = (draft: EditorDraft): EditorDraft => JSON.parse(JSON.stringify(draft));
 const now = () => new Date().toISOString();
 const MAX_ZOOM = 6;
-const DEFAULT_TEXT_WIDTH = 180;
-const DEFAULT_TEXT_HEIGHT = 72;
-const DEFAULT_TEXT_STYLE = {
+const DEFAULT_TEXT_WIDTH = 32;
+const DEFAULT_TEXT_HEIGHT = 24;
+export const DEFAULT_TEXT_STYLE: AnnotationStyle = {
   stroke: '#2563eb',
-  fill: 'rgba(255,255,255,0.95)',
+  fill: 'rgba(255,255,255,0)',
   strokeWidth: 2,
+  textColor: '#0f172a',
+  fontSize: 14,
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  textDecoration: 'none',
+  textBackgroundColor: 'transparent',
+  textOutlineColor: 'transparent',
+  textOutlineWidth: 0,
+  textBoxMode: 'auto',
 };
 
 export const createEmptyDraft = (): EditorDraft => ({
@@ -50,6 +60,7 @@ export interface InlineTextEditorState {
   width: number;
   height: number;
   value: string;
+  style: AnnotationStyle;
 }
 
 export interface EditorUiState {
@@ -57,6 +68,7 @@ export interface EditorUiState {
   selectedAnnotationId: string | null;
   contextMenu: ContextMenuState;
   inlineTextEditor: InlineTextEditorState | null;
+  textStylePreset: AnnotationStyle;
 }
 
 const createClosedContextMenu = (): ContextMenuState => ({
@@ -71,6 +83,7 @@ export const createEditorUiState = (draft: EditorDraft = createEmptyDraft()): Ed
   selectedAnnotationId: null,
   contextMenu: createClosedContextMenu(),
   inlineTextEditor: null,
+  textStylePreset: DEFAULT_TEXT_STYLE,
 });
 
 export const openContextMenuState = (
@@ -106,6 +119,7 @@ export const startInlineTextCreateState = (
     width: DEFAULT_TEXT_WIDTH,
     height: DEFAULT_TEXT_HEIGHT,
     value: '',
+    style: state.textStylePreset,
   },
 });
 
@@ -130,6 +144,10 @@ export const startInlineTextEditState = (
       width: annotation.geometry.width,
       height: annotation.geometry.height,
       value: annotation.label ?? '',
+      style: {
+        ...DEFAULT_TEXT_STYLE,
+        ...annotation.style,
+      },
     },
   };
 };
@@ -147,6 +165,79 @@ export const updateInlineTextValueState = (
     inlineTextEditor: {
       ...state.inlineTextEditor,
       value,
+    },
+  };
+};
+
+export const updateInlineTextSizeState = (
+  state: EditorUiState,
+  size: { width: number; height: number },
+): EditorUiState => {
+  if (!state.inlineTextEditor) {
+    return state;
+  }
+
+  return {
+    ...state,
+    inlineTextEditor: {
+      ...state.inlineTextEditor,
+      width: size.width,
+      height: size.height,
+    },
+  };
+};
+
+export const updateInlineTextFrameState = (
+  state: EditorUiState,
+  frame: Partial<Pick<InlineTextEditorState, 'x' | 'y' | 'width' | 'height'>> & {
+    boxMode?: AnnotationStyle['textBoxMode'];
+  },
+): EditorUiState => {
+  if (!state.inlineTextEditor) {
+    return state;
+  }
+
+  return {
+    ...state,
+    inlineTextEditor: {
+      ...state.inlineTextEditor,
+      ...(frame.x !== undefined ? { x: frame.x } : {}),
+      ...(frame.y !== undefined ? { y: frame.y } : {}),
+      ...(frame.width !== undefined ? { width: frame.width } : {}),
+      ...(frame.height !== undefined ? { height: frame.height } : {}),
+      style: {
+        ...state.inlineTextEditor.style,
+        ...(frame.boxMode ? { textBoxMode: frame.boxMode } : {}),
+      },
+    },
+  };
+};
+
+export const updateTextStylePresetState = (
+  state: EditorUiState,
+  patch: Partial<AnnotationStyle>,
+): EditorUiState => {
+  const textStylePreset = {
+    ...state.textStylePreset,
+    ...patch,
+  };
+
+  if (!state.inlineTextEditor) {
+    return {
+      ...state,
+      textStylePreset,
+    };
+  }
+
+  return {
+    ...state,
+    textStylePreset,
+    inlineTextEditor: {
+      ...state.inlineTextEditor,
+      style: {
+        ...state.inlineTextEditor.style,
+        ...patch,
+      },
     },
   };
 };
@@ -177,7 +268,7 @@ const createTextAnnotation = (
       height: editor.height,
     },
     label,
-    style: DEFAULT_TEXT_STYLE,
+    style: editor.style,
     createdAt: now(),
   };
 };
@@ -202,6 +293,16 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
     }
 
     annotation.label = value;
+    annotation.style = state.inlineTextEditor.style;
+
+    if (annotation.geometry.kind === 'text') {
+      annotation.geometry = {
+        ...annotation.geometry,
+        width: state.inlineTextEditor.width,
+        height: state.inlineTextEditor.height,
+      };
+    }
+
     nextDraft.updatedAt = now();
 
     return {
@@ -209,6 +310,7 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
       draft: nextDraft,
       inlineTextEditor: null,
       selectedAnnotationId: annotation.id,
+      textStylePreset: state.inlineTextEditor.style,
     };
   }
 
@@ -227,6 +329,7 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
     draft: nextDraft,
     inlineTextEditor: null,
     selectedAnnotationId: annotation.id,
+    textStylePreset: state.inlineTextEditor.style,
   };
 };
 
@@ -239,6 +342,7 @@ interface EditorState {
   zoom: number;
   contextMenu: ContextMenuState;
   inlineTextEditor: InlineTextEditorState | null;
+  textStylePreset: AnnotationStyle;
   setDraft: (draft: EditorDraft) => void;
   resetDraft: () => void;
   setAsset: (asset: ImageAsset) => void;
@@ -249,6 +353,14 @@ interface EditorState {
   startInlineTextCreate: (point: { x: number; y: number }) => void;
   startInlineTextEdit: (annotationId: string) => void;
   updateInlineTextValue: (value: string) => void;
+  updateInlineTextSize: (size: { width: number; height: number }) => void;
+  updateInlineTextFrame: (
+    frame: Partial<Pick<InlineTextEditorState, 'x' | 'y' | 'width' | 'height'>> & {
+      boxMode?: AnnotationStyle['textBoxMode'];
+    },
+  ) => void;
+  updateTextStylePreset: (patch: Partial<AnnotationStyle>) => void;
+  updateSelectedTextStyle: (patch: Partial<AnnotationStyle>) => void;
   commitInlineTextEditor: () => void;
   cancelInlineTextEditor: () => void;
   setAssetPosition: (x: number, y: number) => void;
@@ -280,6 +392,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   zoom: 1,
   contextMenu: createClosedContextMenu(),
   inlineTextEditor: null,
+  textStylePreset: DEFAULT_TEXT_STYLE,
   setDraft: (draft) =>
     set({
       draft,
@@ -288,6 +401,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedAnnotationId: null,
       contextMenu: createClosedContextMenu(),
       inlineTextEditor: null,
+      textStylePreset: DEFAULT_TEXT_STYLE,
     }),
   resetDraft: () =>
     set({
@@ -299,6 +413,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       zoom: 1,
       contextMenu: createClosedContextMenu(),
       inlineTextEditor: null,
+      textStylePreset: DEFAULT_TEXT_STYLE,
     }),
   setAsset: (asset) =>
     set((state) => ({
@@ -317,13 +432,58 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => startInlineTextEditState(state, annotationId)),
   updateInlineTextValue: (value) =>
     set((state) => updateInlineTextValueState(state, value)),
+  updateInlineTextSize: (size) =>
+    set((state) => updateInlineTextSizeState(state, size)),
+  updateInlineTextFrame: (frame) =>
+    set((state) => updateInlineTextFrameState(state, frame)),
+  updateTextStylePreset: (patch) =>
+    set((state) => updateTextStylePresetState(state, patch)),
+  updateSelectedTextStyle: (patch) =>
+    set((state) => {
+      if (state.inlineTextEditor || !state.selectedAnnotationId) {
+        return updateTextStylePresetState(state, patch);
+      }
+
+      const selectedAnnotation = state.draft.annotations.find((item) => item.id === state.selectedAnnotationId);
+
+      if (!selectedAnnotation || selectedAnnotation.tool !== 'text') {
+        return updateTextStylePresetState(state, patch);
+      }
+
+      const nextDraft = cloneDraft(state.draft);
+      const annotation = nextDraft.annotations.find((item) => item.id === state.selectedAnnotationId);
+
+      if (!annotation || annotation.tool !== 'text') {
+        return updateTextStylePresetState(state, patch);
+      }
+
+      annotation.style = {
+        ...annotation.style,
+        ...patch,
+      };
+      nextDraft.updatedAt = now();
+
+      return {
+        ...pushHistory(state, nextDraft),
+        textStylePreset: {
+          ...state.textStylePreset,
+          ...patch,
+        },
+        contextMenu: createClosedContextMenu(),
+        inlineTextEditor: null,
+      };
+    }),
   commitInlineTextEditor: () =>
     set((state) => {
+      const wasEditingText = Boolean(state.inlineTextEditor);
       const nextUi = commitInlineTextEditorState(state);
+      const shouldReturnToSelect =
+        wasEditingText && nextUi.inlineTextEditor === null && nextUi.draft !== state.draft;
 
       if (nextUi.draft !== state.draft) {
         return {
           ...pushHistory(state, nextUi.draft),
+          activeTool: shouldReturnToSelect ? 'select' : state.activeTool,
           selectedAnnotationId: nextUi.selectedAnnotationId,
           contextMenu: nextUi.contextMenu,
           inlineTextEditor: nextUi.inlineTextEditor,
@@ -331,6 +491,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
 
       return {
+        activeTool: shouldReturnToSelect ? 'select' : state.activeTool,
         selectedAnnotationId: nextUi.selectedAnnotationId,
         contextMenu: nextUi.contextMenu,
         inlineTextEditor: nextUi.inlineTextEditor,

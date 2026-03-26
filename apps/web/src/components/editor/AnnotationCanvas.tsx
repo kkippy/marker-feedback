@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
 import { useLoadedImage } from '@/lib/useLoadedImage';
-import { useEditorStore } from '@/lib/useEditorStore';
+import { DEFAULT_TEXT_STYLE, useEditorStore } from '@/lib/useEditorStore';
 import { toDocumentLocalPoint } from './annotationCoordinates';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
@@ -25,6 +25,24 @@ const MINI_MAP_WIDTH = 176;
 const MAX_ZOOM = 6;
 const PADDING = 0;
 const COPY_OFFSET = 24;
+const getTextFontStyle = (style: Annotation['style']) => {
+  const fontWeight = style.fontWeight ?? DEFAULT_TEXT_STYLE.fontWeight;
+  const fontStyle = style.fontStyle ?? DEFAULT_TEXT_STYLE.fontStyle;
+
+  if (fontWeight === 'bold' && fontStyle === 'italic') {
+    return 'bold italic';
+  }
+
+  if (fontWeight === 'bold') {
+    return 'bold';
+  }
+
+  if (fontStyle === 'italic') {
+    return 'italic';
+  }
+
+  return 'normal';
+};
 
 const fitImage = (imageWidth: number, imageHeight: number, maxWidth: number, maxHeight: number) => {
   const availableWidth = maxWidth - PADDING * 2;
@@ -51,7 +69,7 @@ const getDefaultStyle = (tool: Annotation['tool']) =>
         : tool === 'marker'
           ? { stroke: '#2563eb', fill: '#2563eb', strokeWidth: 2 }
           : tool === 'text'
-            ? { stroke: '#2563eb', fill: 'rgba(255,255,255,0.95)', strokeWidth: 2 }
+            ? { ...DEFAULT_TEXT_STYLE }
             : { stroke: '#ef4444', fill: 'rgba(239,68,68,0.08)', strokeWidth: 3 };
 
 const buildAnnotation = (
@@ -126,6 +144,8 @@ export function AnnotationCanvas({
   const startInlineTextCreate = useEditorStore((state) => state.startInlineTextCreate);
   const startInlineTextEdit = useEditorStore((state) => state.startInlineTextEdit);
   const updateInlineTextValue = useEditorStore((state) => state.updateInlineTextValue);
+  const updateInlineTextSize = useEditorStore((state) => state.updateInlineTextSize);
+  const updateInlineTextFrame = useEditorStore((state) => state.updateInlineTextFrame);
   const commitInlineTextEditor = useEditorStore((state) => state.commitInlineTextEditor);
   const cancelInlineTextEditor = useEditorStore((state) => state.cancelInlineTextEditor);
   const image = useLoadedImage(draft.asset?.imageDataUrl);
@@ -135,6 +155,7 @@ export function AnnotationCanvas({
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [assetDragOffset, setAssetDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredTextAnnotationId, setHoveredTextAnnotationId] = useState<string | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ left: 0, top: 0 });
   const documentOrigin = useMemo(
     () => ({
@@ -908,6 +929,10 @@ export function AnnotationCanvas({
           return null;
         }
 
+        const isEditingCurrentText = inlineTextEditor?.annotationId === annotation.id;
+        const isHoveredCurrentText = hoveredTextAnnotationId === annotation.id;
+        const textBackgroundColor = annotation.style.textBackgroundColor ?? DEFAULT_TEXT_STYLE.textBackgroundColor;
+
         return (
           <Group
             key={annotation.id}
@@ -915,6 +940,16 @@ export function AnnotationCanvas({
             y={renderedDocumentPosition.y + geometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
             {...commonProps}
+            onMouseEnter={() => {
+              if (!readOnly) {
+                setHoveredTextAnnotationId(annotation.id);
+              }
+            }}
+            onMouseLeave={() => {
+              if (hoveredTextAnnotationId === annotation.id) {
+                setHoveredTextAnnotationId(null);
+              }
+            }}
             onDblClick={() => {
               if (!readOnly) {
                 startInlineTextEdit(annotation.id);
@@ -941,13 +976,29 @@ export function AnnotationCanvas({
             <Rect
               width={geometry.width}
               height={geometry.height}
-              fill={annotation.style.fill}
-              stroke={annotation.style.stroke}
-              strokeWidth={annotation.style.strokeWidth ?? 2}
-              cornerRadius={10}
-              dash={selected ? [8, 6] : undefined}
+              fill={
+                !isEditingCurrentText && textBackgroundColor && textBackgroundColor !== 'transparent'
+                  ? textBackgroundColor
+                  : 'rgba(15,23,42,0.001)'
+              }
+              stroke={
+                !isEditingCurrentText && isHoveredCurrentText
+                    ? '#94a3b8'
+                    : undefined
+              }
+              strokeWidth={isHoveredCurrentText ? 1 : 0}
             />
-            <Text text={annotation.label ?? ''} x={12} y={12} width={geometry.width - 24} fill="#0f172a" fontSize={14} />
+            {isEditingCurrentText ? null : (
+              <Text
+                text={annotation.label ?? ''}
+                width={geometry.width}
+                fill={annotation.style.textColor ?? DEFAULT_TEXT_STYLE.textColor}
+                fontSize={annotation.style.fontSize ?? DEFAULT_TEXT_STYLE.fontSize}
+                fontStyle={getTextFontStyle(annotation.style)}
+                textDecoration={annotation.style.textDecoration ?? DEFAULT_TEXT_STYLE.textDecoration}
+                lineHeight={1.45}
+              />
+            )}
           </Group>
         );
       }
@@ -1136,13 +1187,21 @@ export function AnnotationCanvas({
           <InlineTextEditor
             isOpen
             value={inlineTextEditor.value}
+            frame={{
+              x: inlineTextEditor.x,
+              y: inlineTextEditor.y,
+              width: inlineTextEditor.width,
+              height: inlineTextEditor.height,
+            }}
+            textStyle={inlineTextEditor.style ?? DEFAULT_TEXT_STYLE}
+            canvasScale={canvasScale}
             style={{
               left: inlineTextStyle.left,
               top: inlineTextStyle.top,
-              width: Math.max(inlineTextStyle.width, 180),
-              minHeight: Math.max(inlineTextStyle.minHeight, 72),
             }}
             onChange={updateInlineTextValue}
+            onSizeChange={updateInlineTextSize}
+            onFrameChange={updateInlineTextFrame}
             onCommit={commitInlineTextEditor}
             onCancel={cancelInlineTextEditor}
           />

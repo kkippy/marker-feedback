@@ -4,6 +4,7 @@ import { createId, type EditorDraft, type ImageAsset } from '@marker/shared';
 import { FolderOpen, ImageUp, Redo2, Undo2 } from 'lucide-react';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
 import { CommentSidebar } from '@/components/editor/CommentSidebar';
+import { TextStyleControls } from '@/components/editor/TextStyleControls';
 import { TopBar } from '@/components/editor/TopBar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -31,14 +32,35 @@ export function EditorPage() {
   const [exporter, setExporter] = useState<(() => string | undefined) | null>(null);
   const draft = useEditorStore((state) => state.draft);
   const activeTool = useEditorStore((state) => state.activeTool);
+  const selectedAnnotationId = useEditorStore((state) => state.selectedAnnotationId);
+  const inlineTextEditor = useEditorStore((state) => state.inlineTextEditor);
+  const textStylePreset = useEditorStore((state) => state.textStylePreset);
   const zoom = useEditorStore((state) => state.zoom);
   const setDraft = useEditorStore((state) => state.setDraft);
   const setActiveTool = useEditorStore((state) => state.setActiveTool);
+  const updateTextStylePreset = useEditorStore((state) => state.updateTextStylePreset);
+  const updateSelectedTextStyle = useEditorStore((state) => state.updateSelectedTextStyle);
+  const commitInlineTextEditor = useEditorStore((state) => state.commitInlineTextEditor);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetDraft = useEditorStore((state) => state.resetDraft);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
+  const selectedTextAnnotation = selectedAnnotationId
+    ? draft.annotations.find((item) => item.id === selectedAnnotationId && item.tool === 'text')
+    : null;
+  const activeTextStyle =
+    inlineTextEditor?.style ??
+    selectedTextAnnotation?.style ??
+    (activeTool === 'text' ? textStylePreset : null);
+  const handleTextStyleChange = (patch: Parameters<typeof updateSelectedTextStyle>[0]) => {
+    if (inlineTextEditor || selectedTextAnnotation) {
+      updateSelectedTextStyle(patch);
+      return;
+    }
+
+    updateTextStylePreset(patch);
+  };
 
   useEffect(() => {
     listDraftPreviews().then(setDraftPreviews);
@@ -110,6 +132,15 @@ export function EditorPage() {
           zoom={zoom}
           activeTool={draft.asset ? activeTool : undefined}
           onToolChange={draft.asset ? setActiveTool : undefined}
+          textStyleControls={
+            draft.asset && activeTextStyle ? (
+              <TextStyleControls
+                style={activeTextStyle}
+                onChange={handleTextStyleChange}
+                onCommit={inlineTextEditor ? commitInlineTextEditor : undefined}
+              />
+            ) : undefined
+          }
           discussionPanel={draft.asset ? <CommentSidebar /> : undefined}
           secondaryActions={
             draft.asset ? (

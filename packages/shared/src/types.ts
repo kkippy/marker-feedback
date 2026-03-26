@@ -46,6 +46,15 @@ export interface AnnotationStyle {
   stroke: string;
   fill?: string;
   strokeWidth?: number;
+  textColor?: string;
+  fontSize?: number;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'none' | 'underline';
+  textBackgroundColor?: string;
+  textOutlineColor?: string;
+  textOutlineWidth?: number;
+  textBoxMode?: 'auto' | 'manual';
 }
 
 export interface Annotation {

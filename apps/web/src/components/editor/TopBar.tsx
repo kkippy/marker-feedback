@@ -11,6 +11,7 @@ export function TopBar(props: {
   zoom: number;
   activeTool?: Parameters<typeof ToolPalette>[0]['activeTool'];
   onToolChange?: Parameters<typeof ToolPalette>[0]['onToolChange'];
+  textStyleControls?: ReactNode;
   discussionPanel?: ReactNode;
   secondaryActions?: ReactNode;
   showSaveDraft?: boolean;
@@ -70,6 +71,8 @@ export function TopBar(props: {
         {props.activeTool && props.onToolChange ? (
           <ToolPalette activeTool={props.activeTool} onToolChange={props.onToolChange} />
         ) : null}
+
+        {props.textStyleControls}
 
         <Button
           type="button"
