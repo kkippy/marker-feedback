@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type WheelEventHandler } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type WheelEventHandler } from 'react';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { Arrow, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import { createId, normalizeRect, type Annotation, type AnnotationGeometry } from '@marker/shared';
@@ -8,8 +8,12 @@ import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
 import { useLoadedImage } from '@/lib/useLoadedImage';
 import { useEditorStore } from '@/lib/useEditorStore';
-import { getViewportScrollForWorkspacePoint } from './minimapNavigation';
 import { toDocumentLocalPoint } from './annotationCoordinates';
+import { CanvasContextMenu } from './CanvasContextMenu';
+import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
+import { getInlineTextOverlayStyle } from './inlineTextOverlay';
+import { InlineTextEditor } from './InlineTextEditor';
+import { getViewportScrollForWorkspacePoint } from './minimapNavigation';
 
 const DOCUMENT_WIDTH = 960;
 const DOCUMENT_HEIGHT = 560;
@@ -20,6 +24,7 @@ const MAJOR_GRID_SIZE = 200;
 const MINI_MAP_WIDTH = 176;
 const MAX_ZOOM = 6;
 const PADDING = 0;
+const COPY_OFFSET = 24;
 
 const fitImage = (imageWidth: number, imageHeight: number, maxWidth: number, maxHeight: number) => {
   const availableWidth = maxWidth - PADDING * 2;
@@ -66,6 +71,31 @@ const buildAnnotation = (
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+const offsetAnnotationGeometry = (geometry: AnnotationGeometry): AnnotationGeometry => {
+  switch (geometry.kind) {
+    case 'rect':
+    case 'marker':
+    case 'text':
+      return {
+        ...geometry,
+        x: geometry.x + COPY_OFFSET,
+        y: geometry.y + COPY_OFFSET,
+      };
+    case 'arrow':
+      return {
+        ...geometry,
+        points: [
+          geometry.points[0] + COPY_OFFSET,
+          geometry.points[1] + COPY_OFFSET,
+          geometry.points[2] + COPY_OFFSET,
+          geometry.points[3] + COPY_OFFSET,
+        ],
+      };
+    default:
+      return geometry;
+  }
+};
+
 export function AnnotationCanvas({
   readOnly = false,
   onExportReady,
@@ -73,7 +103,8 @@ export function AnnotationCanvas({
   readOnly?: boolean;
   onExportReady?: (exporter: () => string | undefined) => void;
 }) {
-  const { messages } = useLocale();
+  useLocale();
+  const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<any>(null);
   const hasInitializedViewRef = useRef(false);
@@ -81,11 +112,22 @@ export function AnnotationCanvas({
   const activeTool = useEditorStore((state) => state.activeTool);
   const selectedAnnotationId = useEditorStore((state) => state.selectedAnnotationId);
   const zoom = useEditorStore((state) => state.zoom);
+  const contextMenu = useEditorStore((state) => state.contextMenu);
+  const inlineTextEditor = useEditorStore((state) => state.inlineTextEditor);
   const setZoom = useEditorStore((state) => state.setZoom);
+  const setActiveTool = useEditorStore((state) => state.setActiveTool);
   const addAnnotation = useEditorStore((state) => state.addAnnotation);
   const updateAnnotation = useEditorStore((state) => state.updateAnnotation);
+  const commitDraft = useEditorStore((state) => state.commitDraft);
   const setAssetPosition = useEditorStore((state) => state.setAssetPosition);
   const setSelectedAnnotation = useEditorStore((state) => state.setSelectedAnnotation);
+  const openContextMenu = useEditorStore((state) => state.openContextMenu);
+  const closeContextMenu = useEditorStore((state) => state.closeContextMenu);
+  const startInlineTextCreate = useEditorStore((state) => state.startInlineTextCreate);
+  const startInlineTextEdit = useEditorStore((state) => state.startInlineTextEdit);
+  const updateInlineTextValue = useEditorStore((state) => state.updateInlineTextValue);
+  const commitInlineTextEditor = useEditorStore((state) => state.commitInlineTextEditor);
+  const cancelInlineTextEditor = useEditorStore((state) => state.cancelInlineTextEditor);
   const image = useLoadedImage(draft.asset?.imageDataUrl);
   const [viewportSize, setViewportSize] = useState({ width: DOCUMENT_WIDTH, height: DOCUMENT_HEIGHT });
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -158,6 +200,41 @@ export function AnnotationCanvas({
     () => Math.max(0, (stageHeight - scaledWorkspaceHeight) / 2),
     [scaledWorkspaceHeight, stageHeight],
   );
+  const contextMenuItems = useMemo(() => {
+    const target = contextMenu.target;
+
+    if (!target) {
+      return [];
+    }
+
+    if (target.kind === 'empty-space') {
+      return getContextMenuItems({ kind: 'empty-space' });
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === target.annotationId);
+    return annotation ? getContextMenuItems({ kind: 'annotation', annotation }) : [];
+  }, [contextMenu.target, draft.annotations]);
+  const inlineTextStyle = useMemo(() => {
+    if (!inlineTextEditor) {
+      return null;
+    }
+
+    return getInlineTextOverlayStyle({
+      annotationGeometry: {
+        kind: 'text',
+        x: inlineTextEditor.x,
+        y: inlineTextEditor.y,
+        width: inlineTextEditor.width,
+        height: inlineTextEditor.height,
+      },
+      documentPosition: renderedDocumentPosition,
+      canvasScale,
+      layerOffsetX,
+      layerOffsetY,
+      scrollLeft: scrollPosition.left,
+      scrollTop: scrollPosition.top,
+    });
+  }, [canvasScale, inlineTextEditor, layerOffsetX, layerOffsetY, renderedDocumentPosition, scrollPosition.left, scrollPosition.top]);
   const pendingScrollRef = useRef<{ left: number; top: number } | null>(null);
   const spacePressedRef = useRef(false);
   const didPanRef = useRef(false);
@@ -312,6 +389,19 @@ export function AnnotationCanvas({
     );
   }, [canvasScale, documentPosition.x, documentPosition.y, layerOffsetX, layerOffsetY, onExportReady]);
 
+  const getFramePosition = (clientX: number, clientY: number) => {
+    const rect = frameRef.current?.getBoundingClientRect();
+
+    if (!rect) {
+      return { x: clientX, y: clientY };
+    }
+
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  };
+
   const getPointer = (restrictToDocument = false) => {
     const stage = stageRef.current;
     const pointer = stage?.getPointerPosition();
@@ -365,6 +455,10 @@ export function AnnotationCanvas({
   };
 
   const handleMouseDownCapture: MouseEventHandler<HTMLDivElement> = (event) => {
+    if (contextMenu.isOpen) {
+      closeContextMenu();
+    }
+
     const shouldPan = event.button === 1 || (spacePressedRef.current && event.button === 0);
 
     if (!shouldPan) {
@@ -377,6 +471,10 @@ export function AnnotationCanvas({
 
   const handleWheel: WheelEventHandler<HTMLDivElement> = (event) => {
     event.preventDefault();
+
+    if (contextMenu.isOpen) {
+      closeContextMenu();
+    }
 
     const viewport = viewportRef.current;
 
@@ -452,28 +550,137 @@ export function AnnotationCanvas({
     }
 
     if (activeTool === 'text') {
-      const body = window.prompt(
-        messages.annotation.textPromptTitle,
-        messages.annotation.textPromptDefault,
-      );
-
-      if (!body) {
-        return;
-      }
-
-      addAnnotation({
-        ...buildAnnotation(
-          'text',
-          { kind: 'text', x: pointer.x, y: pointer.y, width: 180, height: 72 },
-          draft.asset.id,
-          draft.annotations.length + 1,
-        ),
-        label: body,
-      });
+      startInlineTextCreate(pointer);
       return;
     }
 
     setDragStart(pointer);
+  };
+
+  const handleStageContextMenu = (event: KonvaEventObject<PointerEvent>) => {
+    event.evt.preventDefault();
+
+    if (readOnly || !draft.asset) {
+      return;
+    }
+
+    if (inlineTextEditor) {
+      commitInlineTextEditor();
+    }
+
+    const pointer = getPointer(true);
+
+    if (!pointer) {
+      closeContextMenu();
+      return;
+    }
+
+    setSelectedAnnotation(null);
+    openContextMenu({ kind: 'empty-space', point: pointer }, getFramePosition(event.evt.clientX, event.evt.clientY));
+  };
+
+  const openAnnotationContextMenu = (annotation: Annotation, event: KonvaEventObject<PointerEvent>) => {
+    event.cancelBubble = true;
+    event.evt.preventDefault();
+    event.evt.stopPropagation();
+
+    if (readOnly) {
+      return;
+    }
+
+    if (inlineTextEditor) {
+      commitInlineTextEditor();
+    }
+
+    setSelectedAnnotation(annotation.id);
+    openContextMenu(
+      { kind: 'annotation', annotationId: annotation.id },
+      getFramePosition(event.evt.clientX, event.evt.clientY),
+    );
+  };
+
+  const handleContextMenuAction = (actionId: ContextMenuActionId) => {
+    const target = contextMenu.target;
+
+    if (!target) {
+      return;
+    }
+
+    if (actionId === 'add-text' && target.kind === 'empty-space') {
+      startInlineTextCreate(target.point);
+      return;
+    }
+
+    if (actionId === 'rectangle' || actionId === 'arrow' || actionId === 'highlight' || actionId === 'marker') {
+      setActiveTool(actionId);
+      closeContextMenu();
+      return;
+    }
+
+    if (target.kind !== 'annotation') {
+      closeContextMenu();
+      return;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === target.annotationId);
+
+    if (!annotation) {
+      closeContextMenu();
+      return;
+    }
+
+    switch (actionId) {
+      case 'edit':
+        if (annotation.tool === 'text') {
+          startInlineTextEdit(annotation.id);
+        } else {
+          setSelectedAnnotation(annotation.id);
+          closeContextMenu();
+        }
+        return;
+      case 'edit-text':
+        startInlineTextEdit(annotation.id);
+        return;
+      case 'copy':
+        commitDraft((nextDraft) => {
+          const current = nextDraft.annotations.find((item) => item.id === annotation.id);
+
+          if (!current) {
+            return;
+          }
+
+          nextDraft.annotations.push({
+            ...current,
+            id: createId('annotation'),
+            geometry: offsetAnnotationGeometry(current.geometry),
+            createdAt: new Date().toISOString(),
+          });
+        });
+        closeContextMenu();
+        return;
+      case 'delete':
+        commitDraft((nextDraft) => {
+          nextDraft.annotations = nextDraft.annotations.filter((item) => item.id !== annotation.id);
+        });
+        setSelectedAnnotation(null);
+        closeContextMenu();
+        return;
+      case 'bring-to-front':
+        commitDraft((nextDraft) => {
+          const index = nextDraft.annotations.findIndex((item) => item.id === annotation.id);
+
+          if (index < 0) {
+            return;
+          }
+
+          const [item] = nextDraft.annotations.splice(index, 1);
+          nextDraft.annotations.push(item);
+        });
+        closeContextMenu();
+        return;
+      default:
+        closeContextMenu();
+    }
   };
 
   const scrollViewportToWorkspacePoint = (
@@ -596,6 +803,11 @@ export function AnnotationCanvas({
   const renderAnnotation = (annotation: Annotation, isPreview = false) => {
     const selected = annotation.id === selectedAnnotationId;
     const geometry = annotation.geometry;
+    const commonProps = {
+      onClick: () => setSelectedAnnotation(annotation.id),
+      onTap: () => setSelectedAnnotation(annotation.id),
+      onContextMenu: (event: KonvaEventObject<PointerEvent>) => openAnnotationContextMenu(annotation, event),
+    };
 
     switch (annotation.tool) {
       case 'rectangle':
@@ -611,8 +823,7 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + geometry.x}
             y={renderedDocumentPosition.y + geometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
-            onClick={() => setSelectedAnnotation(annotation.id)}
-            onTap={() => setSelectedAnnotation(annotation.id)}
+            {...commonProps}
             onDragEnd={(event) => {
               const pos = event.target.position();
               updateAnnotation(annotation.id, (current) => {
@@ -655,9 +866,8 @@ export function AnnotationCanvas({
             pointerLength={10}
             pointerWidth={10}
             strokeWidth={annotation.style.strokeWidth ?? 4}
-            onClick={() => setSelectedAnnotation(annotation.id)}
-            onTap={() => setSelectedAnnotation(annotation.id)}
             dash={selected ? [8, 6] : undefined}
+            {...commonProps}
           />
         );
       }
@@ -673,8 +883,7 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + geometry.x}
             y={renderedDocumentPosition.y + geometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
-            onClick={() => setSelectedAnnotation(annotation.id)}
-            onTap={() => setSelectedAnnotation(annotation.id)}
+            {...commonProps}
             onDragEnd={(event) => {
               const pos = event.target.position();
               updateAnnotation(annotation.id, (current) => {
@@ -705,8 +914,17 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + geometry.x}
             y={renderedDocumentPosition.y + geometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
-            onClick={() => setSelectedAnnotation(annotation.id)}
-            onTap={() => setSelectedAnnotation(annotation.id)}
+            {...commonProps}
+            onDblClick={() => {
+              if (!readOnly) {
+                startInlineTextEdit(annotation.id);
+              }
+            }}
+            onDblTap={() => {
+              if (!readOnly) {
+                startInlineTextEdit(annotation.id);
+              }
+            }}
             onDragEnd={(event) => {
               const pos = event.target.position();
               updateAnnotation(annotation.id, (current) => {
@@ -804,7 +1022,7 @@ export function AnnotationCanvas({
 
   return (
     <Card className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden p-4">
-      <div className="relative min-h-[320px] flex-1">
+      <div ref={frameRef} className="relative min-h-[320px] flex-1">
         <div
           ref={viewportRef}
           className={cn(
@@ -817,12 +1035,15 @@ export function AnnotationCanvas({
                   ? 'cursor-grab'
                 : 'cursor-default',
           )}
-          onScroll={(event) =>
+          onScroll={(event) => {
+            if (contextMenu.isOpen) {
+              closeContextMenu();
+            }
             setScrollPosition({
               left: event.currentTarget.scrollLeft,
               top: event.currentTarget.scrollTop,
-            })
-          }
+            });
+          }}
           onMouseDownCapture={handleMouseDownCapture}
           onWheel={handleWheel}
         >
@@ -834,10 +1055,15 @@ export function AnnotationCanvas({
             onMouseDown={handleStageMouseDown}
             onMouseMove={updatePreview}
             onMouseUp={commitPreview}
+            onContextMenu={handleStageContextMenu}
             onClick={(event) => {
               if (didPanRef.current) {
                 didPanRef.current = false;
                 return;
+              }
+
+              if (contextMenu.isOpen) {
+                closeContextMenu();
               }
 
               if (event.target === event.target.getStage()) {
@@ -905,6 +1131,30 @@ export function AnnotationCanvas({
             </Layer>
           </Stage>
         </div>
+
+        {inlineTextEditor && inlineTextStyle ? (
+          <InlineTextEditor
+            isOpen
+            value={inlineTextEditor.value}
+            style={{
+              left: inlineTextStyle.left,
+              top: inlineTextStyle.top,
+              width: Math.max(inlineTextStyle.width, 180),
+              minHeight: Math.max(inlineTextStyle.minHeight, 72),
+            }}
+            onChange={updateInlineTextValue}
+            onCommit={commitInlineTextEditor}
+            onCancel={cancelInlineTextEditor}
+          />
+        ) : null}
+
+        <CanvasContextMenu
+          isOpen={contextMenu.isOpen && !readOnly}
+          x={contextMenu.screenX}
+          y={contextMenu.screenY}
+          items={contextMenuItems}
+          onSelect={handleContextMenuAction}
+        />
 
         <div className="pointer-events-none absolute inset-x-4 top-4 flex items-start justify-between">
           <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm">

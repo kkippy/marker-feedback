@@ -46,14 +46,14 @@ export function ToolPalette({
 
   return (
     <details className="group relative">
-      <summary className="flex list-none items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white [&::-webkit-details-marker]:hidden">
-        <Badge className="border-blue-200 bg-blue-50 text-blue-700">{messages.tools.title}</Badge>
+      <summary className="flex list-none items-center gap-2 rounded-full border border-dashed border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+        <Badge className="border-slate-200 bg-slate-100 text-slate-500">{messages.tools.title}</Badge>
         <ActiveIcon className="size-4 text-slate-500" />
         <span>{messages.tools.labels[activeTool]}</span>
         <ChevronDown className="size-4 text-slate-400 transition group-open:rotate-180" />
       </summary>
 
-      <div className="absolute left-0 top-full z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-soft">
+      <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-soft">
         <div className="grid grid-cols-2 gap-2">
           {tools.map((tool) => {
             const Icon = toolIcons[tool];

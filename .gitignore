@@ -1,4 +1,4 @@
-node_modules
+﻿node_modules
 dist
 .DS_Store
 .env
@@ -6,6 +6,7 @@ dist
 coverage
 Microsoft/
 .tmp
+docs/
 
 # Tests
 *.test.ts
@@ -15,3 +16,5 @@ Microsoft/
 
 # Logs
 *.log
+.superpowers/
+.worktrees/

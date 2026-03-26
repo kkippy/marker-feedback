@@ -31,10 +31,6 @@ export function TopBar(props: {
         <Badge>{messages.topBar.threads(props.threadCount)}</Badge>
         <Badge>{messages.topBar.zoom(Math.round(props.zoom * 100))}</Badge>
 
-        {props.activeTool && props.onToolChange ? (
-          <ToolPalette activeTool={props.activeTool} onToolChange={props.onToolChange} />
-        ) : null}
-
         <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-600">
           <span>{messages.language.label}</span>
           <select
@@ -70,6 +66,10 @@ export function TopBar(props: {
 
       <div className="flex flex-wrap items-center gap-2">
         {props.secondaryActions}
+
+        {props.activeTool && props.onToolChange ? (
+          <ToolPalette activeTool={props.activeTool} onToolChange={props.onToolChange} />
+        ) : null}
 
         <Button
           type="button"
