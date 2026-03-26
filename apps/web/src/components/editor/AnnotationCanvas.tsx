@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type WheelEventHandler } from 'react';
+﻿import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type WheelEventHandler } from 'react';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { Arrow, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import { createId, normalizeRect, type Annotation, type AnnotationGeometry } from '@marker/shared';
@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
 import { useLoadedImage } from '@/lib/useLoadedImage';
 import { useEditorStore } from '@/lib/useEditorStore';
+import { getViewportScrollForWorkspacePoint } from './minimapNavigation';
+import { toDocumentLocalPoint } from './annotationCoordinates';
 
 const DOCUMENT_WIDTH = 960;
 const DOCUMENT_HEIGHT = 560;
@@ -336,21 +338,10 @@ export function AnnotationCanvas({
       return logicalPoint;
     }
 
-    const localPoint = {
-      x: logicalPoint.x - renderedDocumentPosition.x,
-      y: logicalPoint.y - renderedDocumentPosition.y,
-    };
-
-    if (
-      localPoint.x < 0 ||
-      localPoint.y < 0 ||
-      localPoint.x > DOCUMENT_WIDTH ||
-      localPoint.y > DOCUMENT_HEIGHT
-    ) {
-      return null;
-    }
-
-    return localPoint;
+    return toDocumentLocalPoint({
+      workspacePoint: logicalPoint,
+      documentPosition: renderedDocumentPosition,
+    });
   };
 
   const markerCount = draft.annotations.filter((annotation) => annotation.tool === 'marker').length + 1;
@@ -485,11 +476,16 @@ export function AnnotationCanvas({
     setDragStart(pointer);
   };
 
-  const setViewportCenter = (nextZoom: number) => {
+  const scrollViewportToWorkspacePoint = (
+    target: { x: number; y: number },
+    nextZoom = zoom,
+  ) => {
     const viewport = viewportRef.current;
 
     if (!viewport) {
-      setZoom(nextZoom);
+      if (nextZoom !== zoom) {
+        setZoom(nextZoom);
+      }
       return;
     }
 
@@ -500,21 +496,17 @@ export function AnnotationCanvas({
     const nextStageHeight = Math.max(viewportHeight, nextScaledWorkspaceHeight);
     const nextLayerOffsetX = Math.max(0, (nextStageWidth - nextScaledWorkspaceWidth) / 2);
     const nextLayerOffsetY = Math.max(0, (nextStageHeight - nextScaledWorkspaceHeight) / 2);
-    const targetLeft =
-      renderedDocumentPosition.x * nextCanvasScale +
-      (DOCUMENT_WIDTH * nextCanvasScale) / 2 +
-      nextLayerOffsetX -
-      viewport.clientWidth / 2;
-    const targetTop =
-      renderedDocumentPosition.y * nextCanvasScale +
-      (DOCUMENT_HEIGHT * nextCanvasScale) / 2 +
-      nextLayerOffsetY -
-      viewport.clientHeight / 2;
 
-    pendingScrollRef.current = {
-      left: Math.max(0, targetLeft),
-      top: Math.max(0, targetTop),
-    };
+    pendingScrollRef.current = getViewportScrollForWorkspacePoint({
+      target,
+      canvasScale: nextCanvasScale,
+      layerOffsetX: nextLayerOffsetX,
+      layerOffsetY: nextLayerOffsetY,
+      viewportWidth: viewport.clientWidth,
+      viewportHeight: viewport.clientHeight,
+      stageWidth: nextStageWidth,
+      stageHeight: nextStageHeight,
+    });
 
     if (nextZoom === zoom) {
       viewport.scrollLeft = pendingScrollRef.current.left;
@@ -528,6 +520,33 @@ export function AnnotationCanvas({
     }
 
     setZoom(nextZoom);
+  };
+
+  const setViewportCenter = (nextZoom: number) => {
+    scrollViewportToWorkspacePoint(
+      {
+        x: renderedDocumentPosition.x + DOCUMENT_WIDTH / 2,
+        y: renderedDocumentPosition.y + DOCUMENT_HEIGHT / 2,
+      },
+      nextZoom,
+    );
+  };
+
+  const handleMiniMapPointerDown: MouseEventHandler<HTMLDivElement> = (event) => {
+    if (!draft.asset || miniMapHeight <= 0) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointerX = clamp(event.clientX - rect.left, 0, MINI_MAP_WIDTH);
+    const pointerY = clamp(event.clientY - rect.top, 0, miniMapHeight);
+
+    scrollViewportToWorkspacePoint({
+      x: (pointerX / MINI_MAP_WIDTH) * WORKSPACE_WIDTH,
+      y: (pointerY / miniMapHeight) * WORKSPACE_HEIGHT,
+    });
   };
 
   const commitPreview = () => {
@@ -913,8 +932,9 @@ export function AnnotationCanvas({
           <div className="rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm">
             <div className="mb-2 text-xs font-medium text-slate-500">Map</div>
             <div
-              className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+              className="pointer-events-auto relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 cursor-pointer"
               style={{ width: `${MINI_MAP_WIDTH}px`, height: `${miniMapHeight}px` }}
+              onPointerDown={handleMiniMapPointerDown}
             >
               <div
                 className="absolute inset-0"
@@ -949,3 +969,5 @@ export function AnnotationCanvas({
     </Card>
   );
 }
+
+

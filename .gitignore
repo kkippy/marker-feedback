@@ -6,3 +6,12 @@ dist
 coverage
 Microsoft/
 .tmp
+
+# Tests
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Logs
+*.log
