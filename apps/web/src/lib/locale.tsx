@@ -45,8 +45,7 @@ export interface WebMessages {
     recentDraftsDescription: string;
     noDrafts: string;
     draftSummary: (annotationCount: number, hasAsset: boolean) => string;
-    undo: string;
-    redo: string;
+
     replaceImage: string;
   };
   comments: {
@@ -123,8 +122,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       noDrafts: 'No drafts yet.',
       draftSummary: (annotationCount, hasAsset) =>
         `${annotationCount} annotations · ${hasAsset ? 'image ready' : 'missing asset'}`,
-      undo: 'Undo',
-      redo: 'Redo',
+
       replaceImage: 'Replace image',
     },
     comments: {
@@ -207,8 +205,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       noDrafts: '还没有草稿。',
       draftSummary: (annotationCount, hasAsset) =>
         `${annotationCount} 条标注 · ${hasAsset ? '图片已就绪' : '缺少图片资源'}`,
-      undo: '撤销',
-      redo: '重做',
+
       replaceImage: '替换图片',
     },
     comments: {

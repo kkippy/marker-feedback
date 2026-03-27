@@ -119,7 +119,10 @@ export const startInlineTextCreateState = (
     width: DEFAULT_TEXT_WIDTH,
     height: DEFAULT_TEXT_HEIGHT,
     value: '',
-    style: state.textStylePreset,
+    style: {
+      ...state.textStylePreset,
+      textBackgroundColor: DEFAULT_TEXT_STYLE.textBackgroundColor,
+    },
   },
 });
 
@@ -191,6 +194,7 @@ export const updateInlineTextFrameState = (
   state: EditorUiState,
   frame: Partial<Pick<InlineTextEditorState, 'x' | 'y' | 'width' | 'height'>> & {
     boxMode?: AnnotationStyle['textBoxMode'];
+    fontSize?: number;
   },
 ): EditorUiState => {
   if (!state.inlineTextEditor) {
@@ -208,6 +212,7 @@ export const updateInlineTextFrameState = (
       style: {
         ...state.inlineTextEditor.style,
         ...(frame.boxMode ? { textBoxMode: frame.boxMode } : {}),
+        ...(frame.fontSize !== undefined ? { fontSize: frame.fontSize } : {}),
       },
     },
   };
@@ -298,6 +303,8 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
     if (annotation.geometry.kind === 'text') {
       annotation.geometry = {
         ...annotation.geometry,
+        x: state.inlineTextEditor.x,
+        y: state.inlineTextEditor.y,
         width: state.inlineTextEditor.width,
         height: state.inlineTextEditor.height,
       };
@@ -357,6 +364,7 @@ interface EditorState {
   updateInlineTextFrame: (
     frame: Partial<Pick<InlineTextEditorState, 'x' | 'y' | 'width' | 'height'>> & {
       boxMode?: AnnotationStyle['textBoxMode'];
+      fontSize?: number;
     },
   ) => void;
   updateTextStylePreset: (patch: Partial<AnnotationStyle>) => void;

@@ -4,26 +4,30 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { AnnotationStyle } from '@marker/shared';
+import { getResizePreviewForHandle, type ResizeHandle, type TextFrame } from './textResizeScaling';
 
 const BASE_LINE_HEIGHT = 1.45;
 const MIN_TEXT_WIDTH = 20;
 const MAX_TEXT_WIDTH = 320;
+const MIN_RESIZE_FONT_SIZE = 12;
+const MAX_RESIZE_FONT_SIZE = 120;
 const RESIZE_HANDLE_OFFSET = -5;
 const RESIZE_HANDLE_SIZE = 10;
 const FRAME_DRAG_THICKNESS = 8;
 const FRAME_SEGMENT_INSET = 18;
 
-type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 type InteractionState =
   | {
       kind: 'resize';
       handle: ResizeHandle;
       startClientX: number;
       startClientY: number;
+      startFontSize: number;
       startFrame: { x: number; y: number; width: number; height: number };
     }
   | {
@@ -32,6 +36,11 @@ type InteractionState =
       startClientY: number;
       startFrame: { x: number; y: number; width: number; height: number };
     };
+
+interface ResizePreviewState {
+  frame: TextFrame;
+  fontSize: number;
+}
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -62,30 +71,70 @@ export function InlineTextEditor({
   onFrameChange: (
     frame: Partial<{ x: number; y: number; width: number; height: number }> & {
       boxMode?: AnnotationStyle['textBoxMode'];
+      fontSize?: number;
     },
   ) => void;
   onCommit: () => void;
   onCancel: () => void;
 }) {
+  const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const interactionStateRef = useRef<InteractionState | null>(null);
+  const resizePreviewRef = useRef<ResizePreviewState | null>(null);
+  const [resizePreview, setResizePreview] = useState<ResizePreviewState | null>(null);
   const fontSize = textStyle.fontSize ?? 14;
+  const displayFontSize = resizePreview?.fontSize ?? fontSize;
   const fontWeight = textStyle.fontWeight ?? 'normal';
   const fontStyle = textStyle.fontStyle ?? 'normal';
   const textColor = textStyle.textColor ?? '#0f172a';
   const textDecoration = textStyle.textDecoration ?? 'none';
   const textBackgroundColor = textStyle.textBackgroundColor ?? 'transparent';
-  const textBoxMode = textStyle.textBoxMode ?? 'auto';
-  const scaledFontSize = useMemo(() => fontSize * canvasScale, [canvasScale, fontSize]);
-  const scaledLineHeight = useMemo(() => fontSize * BASE_LINE_HEIGHT * canvasScale, [canvasScale, fontSize]);
-  const minTextHeight = useMemo(() => Math.ceil(fontSize * BASE_LINE_HEIGHT), [fontSize]);
+  const displayFrame = resizePreview?.frame ?? frame;
+  const textBoxMode = resizePreview ? 'manual' : (textStyle.textBoxMode ?? 'auto');
+  const displayStyle = useMemo(() => {
+    if (!resizePreview) {
+      return style;
+    }
+
+    return {
+      ...style,
+      left: typeof style.left === 'number' ? style.left + (displayFrame.x - frame.x) * canvasScale : style.left,
+      top: typeof style.top === 'number' ? style.top + (displayFrame.y - frame.y) * canvasScale : style.top,
+    };
+  }, [canvasScale, displayFrame.x, displayFrame.y, frame.x, frame.y, resizePreview, style]);
+  const scaledFontSize = useMemo(() => displayFontSize * canvasScale, [canvasScale, displayFontSize]);
+  const scaledLineHeight = useMemo(() => displayFontSize * BASE_LINE_HEIGHT * canvasScale, [canvasScale, displayFontSize]);
+  const minTextHeight = useMemo(() => Math.ceil(displayFontSize * BASE_LINE_HEIGHT), [displayFontSize]);
+
+  const updateResizePreview = useCallback((nextPreview: ResizePreviewState | null) => {
+    resizePreviewRef.current = nextPreview;
+    setResizePreview(nextPreview);
+  }, []);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!isOpen || !textarea) {
+      return;
+    }
+
+    textarea.focus();
+    const selectionStart = textarea.value.length;
+    textarea.setSelectionRange(selectionStart, selectionStart);
+  }, [isOpen]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
     const measure = measureRef.current;
 
     if (!textarea || !measure) {
+      return;
+    }
+
+    if (resizePreview) {
+      textarea.style.width = `${displayFrame.width * canvasScale}px`;
+      textarea.style.height = `${displayFrame.height * canvasScale}px`;
       return;
     }
 
@@ -97,7 +146,7 @@ export function InlineTextEditor({
       longestLineWidth = Math.max(longestLineWidth, Math.ceil(measure.getBoundingClientRect().width));
     }
 
-    const currentWidthPx = frame.width * canvasScale;
+    const currentWidthPx = displayFrame.width * canvasScale;
     const minWidthPx = MIN_TEXT_WIDTH * canvasScale;
     const maxWidthPx = MAX_TEXT_WIDTH * canvasScale;
     const nextWidthPx =
@@ -108,7 +157,7 @@ export function InlineTextEditor({
     textarea.style.width = `${nextWidthPx}px`;
     textarea.style.height = '0px';
 
-    const minimumHeightPx = Math.max(frame.height * canvasScale, minTextHeight * canvasScale);
+    const minimumHeightPx = Math.max(displayFrame.height * canvasScale, minTextHeight * canvasScale);
     const nextHeightPx = Math.max(Math.ceil(textarea.scrollHeight), minimumHeightPx);
     textarea.style.height = `${nextHeightPx}px`;
 
@@ -116,7 +165,7 @@ export function InlineTextEditor({
       width: Number((nextWidthPx / canvasScale).toFixed(2)),
       height: Number((nextHeightPx / canvasScale).toFixed(2)),
     });
-  }, [canvasScale, fontSize, frame.height, frame.width, minTextHeight, onSizeChange, textBoxMode, value]);
+  }, [canvasScale, displayFrame.height, displayFrame.width, minTextHeight, onSizeChange, resizePreview, textBoxMode, value]);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
@@ -139,39 +188,41 @@ export function InlineTextEditor({
 
       const minimumWidth = MIN_TEXT_WIDTH;
       const minimumHeight = minTextHeight;
-      let nextX = interactionState.startFrame.x;
-      let nextY = interactionState.startFrame.y;
-      let nextWidth = interactionState.startFrame.width;
-      let nextHeight = interactionState.startFrame.height;
+      const nextPreview = getResizePreviewForHandle({
+        handle: interactionState.handle,
+        startFrame: interactionState.startFrame,
+        deltaX,
+        deltaY,
+        startFontSize: interactionState.startFontSize,
+        minimumWidth,
+        minimumHeight,
+        minFontSize: MIN_RESIZE_FONT_SIZE,
+        maxFontSize: MAX_RESIZE_FONT_SIZE,
+      });
 
-      if (interactionState.handle === 'e' || interactionState.handle === 'ne' || interactionState.handle === 'se') {
-        nextWidth = Math.max(minimumWidth, interactionState.startFrame.width + deltaX);
-      } else if (interactionState.handle === 'w' || interactionState.handle === 'nw' || interactionState.handle === 'sw') {
-        nextWidth = Math.max(minimumWidth, interactionState.startFrame.width - deltaX);
-        nextX = interactionState.startFrame.x + (interactionState.startFrame.width - nextWidth);
-      }
-
-      if (interactionState.handle === 's' || interactionState.handle === 'sw' || interactionState.handle === 'se') {
-        nextHeight = Math.max(minimumHeight, interactionState.startFrame.height + deltaY);
-      } else if (interactionState.handle === 'n' || interactionState.handle === 'nw' || interactionState.handle === 'ne') {
-        nextHeight = Math.max(minimumHeight, interactionState.startFrame.height - deltaY);
-        nextY = interactionState.startFrame.y + (interactionState.startFrame.height - nextHeight);
-      }
-
-      onFrameChange({
-        x: Number(nextX.toFixed(2)),
-        y: Number(nextY.toFixed(2)),
-        width: Number(nextWidth.toFixed(2)),
-        height: Number(nextHeight.toFixed(2)),
-        boxMode: 'manual',
+      updateResizePreview({
+        frame: nextPreview.frame,
+        fontSize: nextPreview.fontSize ?? interactionState.startFontSize,
       });
     },
-    [canvasScale, minTextHeight, onFrameChange],
+    [canvasScale, minTextHeight, onFrameChange, updateResizePreview],
   );
 
   const handlePointerUp = useCallback(() => {
+    const interactionState = interactionStateRef.current;
+    const nextPreview = resizePreviewRef.current;
+
+    if (interactionState?.kind === 'resize' && nextPreview) {
+      onFrameChange({
+        ...nextPreview.frame,
+        boxMode: 'manual',
+        ...(nextPreview.fontSize !== interactionState.startFontSize ? { fontSize: nextPreview.fontSize } : {}),
+      });
+    }
+
     interactionStateRef.current = null;
-  }, []);
+    updateResizePreview(null);
+  }, [onFrameChange, updateResizePreview]);
 
   useEffect(() => {
     window.addEventListener('pointermove', handlePointerMove);
@@ -183,6 +234,33 @@ export function InlineTextEditor({
     };
   }, [handlePointerMove, handlePointerUp]);
 
+  useEffect(() => {
+    const handlePointerDownCapture = (event: PointerEvent) => {
+      const editor = editorRef.current;
+      const textarea = textareaRef.current;
+
+      if (!editor || !textarea) {
+        return;
+      }
+
+      const target = event.target;
+
+      if (target instanceof Node && editor.contains(target)) {
+        return;
+      }
+
+      if (document.activeElement === textarea) {
+        textarea.blur();
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDownCapture, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDownCapture, true);
+    };
+  }, []);
+
   const startResize = (handle: ResizeHandle) => (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -192,6 +270,7 @@ export function InlineTextEditor({
       handle,
       startClientX: event.clientX,
       startClientY: event.clientY,
+      startFontSize: fontSize,
       startFrame: frame,
     };
   };
@@ -215,11 +294,12 @@ export function InlineTextEditor({
   return (
     <>
       <div
+        ref={editorRef}
         style={{
-          left: style.left,
-          top: style.top,
-          width: frame.width * canvasScale,
-          height: frame.height * canvasScale,
+          left: displayStyle.left,
+          top: displayStyle.top,
+          width: displayFrame.width * canvasScale,
+          height: displayFrame.height * canvasScale,
         }}
         className="absolute z-40 overflow-visible"
       >

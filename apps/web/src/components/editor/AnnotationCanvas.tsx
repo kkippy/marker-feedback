@@ -1153,19 +1153,6 @@ export function AnnotationCanvas({
                   setAssetDragOffset(null);
                 }}
               >
-                <Rect
-                  width={DOCUMENT_WIDTH}
-                  height={DOCUMENT_HEIGHT}
-                  fill="#ffffff"
-                  stroke="#cbd5e1"
-                  strokeWidth={1.5}
-                  cornerRadius={24}
-                  shadowColor="#94a3b8"
-                  shadowBlur={28}
-                  shadowOpacity={0.2}
-                  shadowOffsetX={0}
-                  shadowOffsetY={12}
-                />
                 {image && imageBounds ? (
                   <KonvaImage
                     image={image}
