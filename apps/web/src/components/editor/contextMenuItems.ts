@@ -35,28 +35,52 @@ export type ContextMenuTarget =
   | { kind: 'empty-space' }
   | { kind: 'annotation'; annotation: Annotation };
 
-const creationItems: ContextMenuItem[] = [
-  { id: 'add-text', label: 'Add text', icon: Type, tool: 'text' },
-  { id: 'rectangle', label: 'Rectangle', icon: Square, tool: 'rectangle' },
-  { id: 'arrow', label: 'Arrow', icon: ArrowRight, tool: 'arrow' },
-  { id: 'highlight', label: 'Highlight', icon: Highlighter, tool: 'highlight' },
-  { id: 'marker', label: 'Marker', icon: Hash, tool: 'marker' },
+export interface ContextMenuLabels {
+  addText: string;
+  rectangle: string;
+  arrow: string;
+  highlight: string;
+  marker: string;
+  editText: string;
+  copy: string;
+  delete: string;
+  bringToFront: string;
+}
+
+const defaultLabels: ContextMenuLabels = {
+  addText: 'Add text',
+  rectangle: 'Rectangle',
+  arrow: 'Arrow',
+  highlight: 'Highlight',
+  marker: 'Marker',
+  editText: 'Edit text',
+  copy: 'Copy',
+  delete: 'Delete',
+  bringToFront: 'Bring to front',
+};
+
+const getCreationItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
+  { id: 'add-text', label: labels.addText, icon: Type, tool: 'text' },
+  { id: 'rectangle', label: labels.rectangle, icon: Square, tool: 'rectangle' },
+  { id: 'arrow', label: labels.arrow, icon: ArrowRight, tool: 'arrow' },
+  { id: 'highlight', label: labels.highlight, icon: Highlighter, tool: 'highlight' },
+  { id: 'marker', label: labels.marker, icon: Hash, tool: 'marker' },
 ];
 
-const objectItems: ContextMenuItem[] = [
-  { id: 'copy', label: 'Copy', icon: Copy },
-  { id: 'delete', label: 'Delete', icon: Trash2, danger: true },
-  { id: 'bring-to-front', label: 'Bring to front', icon: MousePointer2 },
+const getObjectItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
+  { id: 'copy', label: labels.copy, icon: Copy },
+  { id: 'delete', label: labels.delete, icon: Trash2, danger: true },
+  { id: 'bring-to-front', label: labels.bringToFront, icon: MousePointer2 },
 ];
 
-export const getContextMenuItems = (target: ContextMenuTarget): ContextMenuItem[] => {
+export const getContextMenuItems = (target: ContextMenuTarget, labels: ContextMenuLabels = defaultLabels): ContextMenuItem[] => {
   if (target.kind === 'empty-space') {
-    return creationItems;
+    return getCreationItems(labels);
   }
 
   if (target.annotation.tool === 'text') {
-    return [{ id: 'edit-text', label: 'Edit text', icon: ScanText }, ...objectItems];
+    return [{ id: 'edit-text', label: labels.editText, icon: ScanText }, ...getObjectItems(labels)];
   }
 
-  return objectItems;
+  return getObjectItems(labels);
 };

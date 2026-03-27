@@ -72,6 +72,17 @@ export interface WebMessages {
     title: string;
     labels: Record<AnnotationTool, string>;
   };
+  contextMenu: {
+    addText: string;
+    rectangle: string;
+    arrow: string;
+    highlight: string;
+    marker: string;
+    editText: string;
+    copy: string;
+    delete: string;
+    bringToFront: string;
+  };
   annotation: {
     textPromptTitle: string;
     textPromptDefault: string;
@@ -160,6 +171,17 @@ const messages: Record<SupportedLocale, WebMessages> = {
         marker: 'Marker',
       },
     },
+    contextMenu: {
+      addText: 'Add text',
+      rectangle: 'Rectangle',
+      arrow: 'Arrow',
+      highlight: 'Highlight',
+      marker: 'Marker',
+      editText: 'Edit text',
+      copy: 'Copy',
+      delete: 'Delete',
+      bringToFront: 'Bring to front',
+    },
     annotation: {
       textPromptTitle: 'Text note',
       textPromptDefault: 'Add note',
@@ -245,6 +267,17 @@ const messages: Record<SupportedLocale, WebMessages> = {
         blur: '模糊',
         marker: '编号',
       },
+    },
+    contextMenu: {
+      addText: '添加文本',
+      rectangle: '矩形',
+      arrow: '箭头',
+      highlight: '高亮',
+      marker: '编号',
+      editText: '编辑文本',
+      copy: '复制',
+      delete: '删除',
+      bringToFront: '置于顶层',
     },
     annotation: {
       textPromptTitle: '文本备注',

@@ -124,7 +124,7 @@ export function AnnotationCanvas({
   readOnly?: boolean;
   onExportReady?: (exporter: () => string | undefined) => void;
 }) {
-  useLocale();
+  const { messages } = useLocale();
   const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<any>(null);
@@ -234,12 +234,12 @@ export function AnnotationCanvas({
     }
 
     if (target.kind === 'empty-space') {
-      return getContextMenuItems({ kind: 'empty-space' });
+      return getContextMenuItems({ kind: 'empty-space' }, messages.contextMenu);
     }
 
     const annotation = draft.annotations.find((item) => item.id === target.annotationId);
-    return annotation ? getContextMenuItems({ kind: 'annotation', annotation }) : [];
-  }, [contextMenu.target, draft.annotations]);
+    return annotation ? getContextMenuItems({ kind: 'annotation', annotation }, messages.contextMenu) : [];
+  }, [contextMenu.target, draft.annotations, messages.contextMenu]);
   const inlineTextStyle = useMemo(() => {
     if (!inlineTextEditor) {
       return null;
