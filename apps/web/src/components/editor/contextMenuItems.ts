@@ -2,7 +2,6 @@ import type { Annotation, AnnotationTool } from '@marker/shared';
 import {
   ArrowRight,
   Copy,
-  Edit3,
   Highlighter,
   Hash,
   MousePointer2,
@@ -19,7 +18,6 @@ export type ContextMenuActionId =
   | 'arrow'
   | 'highlight'
   | 'marker'
-  | 'edit'
   | 'edit-text'
   | 'copy'
   | 'delete'
@@ -46,7 +44,6 @@ const creationItems: ContextMenuItem[] = [
 ];
 
 const objectItems: ContextMenuItem[] = [
-  { id: 'edit', label: 'Edit', icon: Edit3 },
   { id: 'copy', label: 'Copy', icon: Copy },
   { id: 'delete', label: 'Delete', icon: Trash2, danger: true },
   { id: 'bring-to-front', label: 'Bring to front', icon: MousePointer2 },
@@ -58,7 +55,7 @@ export const getContextMenuItems = (target: ContextMenuTarget): ContextMenuItem[
   }
 
   if (target.annotation.tool === 'text') {
-    return [objectItems[0], { id: 'edit-text', label: 'Edit text', icon: ScanText }, ...objectItems.slice(1)];
+    return [{ id: 'edit-text', label: 'Edit text', icon: ScanText }, ...objectItems];
   }
 
   return objectItems;

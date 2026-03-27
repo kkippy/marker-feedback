@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type WheelEventHandler } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEventHandler } from 'react';
+import { useWheel } from '@use-gesture/react';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { Arrow, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { Arrow, Circle, Group, Image as KonvaImage, Layer, Rect, Stage, Text } from 'react-konva';
 import { createId, normalizeRect, type Annotation, type AnnotationGeometry } from '@marker/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,6 +10,9 @@ import { useLocale } from '@/lib/locale';
 import { useLoadedImage } from '@/lib/useLoadedImage';
 import { DEFAULT_TEXT_STYLE, useEditorStore } from '@/lib/useEditorStore';
 import { toDocumentLocalPoint } from './annotationCoordinates';
+import { getCanvasCheckerboardStyle } from './canvasBackgroundStyle';
+import { interpolateViewportTransition } from './canvasZoomMotion';
+import { getCanvasWheelConfig, getNextCanvasZoom, shouldHandleCanvasZoomShortcut } from './canvasZoomGesture';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
 import { getInlineTextOverlayStyle } from './inlineTextOverlay';
@@ -19,10 +23,9 @@ const DOCUMENT_WIDTH = 960;
 const DOCUMENT_HEIGHT = 560;
 const WORKSPACE_WIDTH = 2800;
 const WORKSPACE_HEIGHT = 1800;
-const GRID_SIZE = 40;
-const MAJOR_GRID_SIZE = 200;
 const MINI_MAP_WIDTH = 176;
 const MAX_ZOOM = 6;
+const ZOOM_ANIMATION_DURATION_MS = 140;
 const PADDING = 0;
 const COPY_OFFSET = 24;
 const getTextFontStyle = (style: Annotation['style']) => {
@@ -158,6 +161,7 @@ export function AnnotationCanvas({
   const [assetDragOffset, setAssetDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [hoveredTextAnnotationId, setHoveredTextAnnotationId] = useState<string | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ left: 0, top: 0 });
+  const [displayZoom, setDisplayZoom] = useState(zoom);
   const documentOrigin = useMemo(
     () => ({
       x: (WORKSPACE_WIDTH - DOCUMENT_WIDTH) / 2,
@@ -195,7 +199,7 @@ export function AnnotationCanvas({
       ),
     [viewportSize.height, viewportSize.width],
   );
-  const canvasScale = useMemo(() => fitScale * zoom, [fitScale, zoom]);
+  const canvasScale = useMemo(() => fitScale * displayZoom, [displayZoom, fitScale]);
   const viewportHeight = useMemo(
     () => Math.max(320, viewportSize.height),
     [viewportSize.height],
@@ -257,7 +261,16 @@ export function AnnotationCanvas({
       scrollTop: scrollPosition.top,
     });
   }, [canvasScale, inlineTextEditor, layerOffsetX, layerOffsetY, renderedDocumentPosition, scrollPosition.left, scrollPosition.top]);
-  const pendingScrollRef = useRef<{ left: number; top: number } | null>(null);
+  const zoomAnimationFrameRef = useRef<number | null>(null);
+  const zoomAnimationRef = useRef<{
+    startTime: number;
+    startZoom: number;
+    targetZoom: number;
+    startLeft: number;
+    targetLeft: number;
+    startTop: number;
+    targetTop: number;
+  } | null>(null);
   const spacePressedRef = useRef(false);
   const didPanRef = useRef(false);
   const panStateRef = useRef<{
@@ -299,21 +312,8 @@ export function AnnotationCanvas({
   useEffect(() => {
     hasInitializedViewRef.current = false;
     setAssetDragOffset(null);
+    setDisplayZoom(zoom);
   }, [draft.asset?.id]);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-
-    if (viewport && pendingScrollRef.current) {
-      viewport.scrollLeft = pendingScrollRef.current.left;
-      viewport.scrollTop = pendingScrollRef.current.top;
-      setScrollPosition({
-        left: pendingScrollRef.current.left,
-        top: pendingScrollRef.current.top,
-      });
-      pendingScrollRef.current = null;
-    }
-  }, [stageHeight, stageWidth]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -327,6 +327,113 @@ export function AnnotationCanvas({
     setScrollPosition({ left: viewport.scrollLeft, top: viewport.scrollTop });
     hasInitializedViewRef.current = true;
   }, [draft.asset, stageHeight, stageWidth]);
+
+  const stopZoomAnimation = useCallback(() => {
+    if (zoomAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(zoomAnimationFrameRef.current);
+      zoomAnimationFrameRef.current = null;
+    }
+    zoomAnimationRef.current = null;
+  }, []);
+
+  const startZoomAnimation = useCallback(
+    ({
+      targetZoom,
+      targetScroll,
+    }: {
+      targetZoom: number;
+      targetScroll?: { left: number; top: number };
+    }) => {
+      const viewport = viewportRef.current;
+
+      if (!viewport) {
+        setDisplayZoom(targetZoom);
+        return;
+      }
+
+      stopZoomAnimation();
+
+      const currentLeft = viewport.scrollLeft;
+      const currentTop = viewport.scrollTop;
+      const nextTargetLeft = targetScroll?.left ?? currentLeft;
+      const nextTargetTop = targetScroll?.top ?? currentTop;
+
+      if (
+        Math.abs(displayZoom - targetZoom) < 0.001 &&
+        Math.abs(currentLeft - nextTargetLeft) < 0.5 &&
+        Math.abs(currentTop - nextTargetTop) < 0.5
+      ) {
+        setDisplayZoom(targetZoom);
+        return;
+      }
+
+      zoomAnimationRef.current = {
+        startTime: 0,
+        startZoom: displayZoom,
+        targetZoom,
+        startLeft: currentLeft,
+        targetLeft: nextTargetLeft,
+        startTop: currentTop,
+        targetTop: nextTargetTop,
+      };
+
+      const step = (timestamp: number) => {
+        const animation = zoomAnimationRef.current;
+        const activeViewport = viewportRef.current;
+
+        if (!animation || !activeViewport) {
+          stopZoomAnimation();
+          return;
+        }
+
+        if (!animation.startTime) {
+          animation.startTime = timestamp;
+        }
+
+        const progress = Math.min(1, (timestamp - animation.startTime) / ZOOM_ANIMATION_DURATION_MS);
+        const snapshot = interpolateViewportTransition({
+          startZoom: animation.startZoom,
+          targetZoom: animation.targetZoom,
+          startLeft: animation.startLeft,
+          targetLeft: animation.targetLeft,
+          startTop: animation.startTop,
+          targetTop: animation.targetTop,
+          progress,
+        });
+
+        setDisplayZoom(snapshot.zoom);
+        activeViewport.scrollLeft = snapshot.left;
+        activeViewport.scrollTop = snapshot.top;
+        setScrollPosition({ left: snapshot.left, top: snapshot.top });
+
+        if (progress < 1) {
+          zoomAnimationFrameRef.current = window.requestAnimationFrame(step);
+          return;
+        }
+
+        stopZoomAnimation();
+      };
+
+      zoomAnimationFrameRef.current = window.requestAnimationFrame(step);
+    },
+    [displayZoom, stopZoomAnimation],
+  );
+
+  useEffect(() => () => stopZoomAnimation(), [stopZoomAnimation]);
+
+  useEffect(() => {
+    const activeAnimation = zoomAnimationRef.current;
+
+    if (Math.abs(displayZoom - zoom) < 0.001) {
+      return;
+    }
+
+    if (activeAnimation && Math.abs(activeAnimation.targetZoom - zoom) < 0.001) {
+      return;
+    }
+
+    startZoomAnimation({ targetZoom: zoom });
+  }, [displayZoom, startZoomAnimation, zoom]);
 
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) =>
@@ -465,6 +572,17 @@ export function AnnotationCanvas({
       return;
     }
 
+    if (zoomAnimationRef.current) {
+      const interruptedZoom = Number(displayZoom.toFixed(2));
+      stopZoomAnimation();
+      setDisplayZoom(interruptedZoom);
+      setZoom(interruptedZoom);
+      setScrollPosition({
+        left: viewport.scrollLeft,
+        top: viewport.scrollTop,
+      });
+    }
+
     panStateRef.current = {
       active: true,
       startClientX: clientX,
@@ -491,29 +609,20 @@ export function AnnotationCanvas({
     startPanning(event.clientX, event.clientY);
   };
 
-  const handleWheel: WheelEventHandler<HTMLDivElement> = (event) => {
-    event.preventDefault();
-
-    if (contextMenu.isOpen) {
-      closeContextMenu();
-    }
-
+  const applyZoomAtOrigin = useCallback((nextZoom: number, originX: number, originY: number) => {
     const viewport = viewportRef.current;
 
     if (!viewport) {
       return;
     }
 
-    const direction = event.deltaY < 0 ? 1 : -1;
-    const nextZoom = Math.max(0.5, Math.min(MAX_ZOOM, Number((zoom + direction * 0.1).toFixed(2))));
-
     if (nextZoom === zoom) {
       return;
     }
 
     const rect = viewport.getBoundingClientRect();
-    const pointerX = viewport.scrollLeft + event.clientX - rect.left;
-    const pointerY = viewport.scrollTop + event.clientY - rect.top;
+    const pointerX = viewport.scrollLeft + originX - rect.left;
+    const pointerY = viewport.scrollTop + originY - rect.top;
     const logicalX = (pointerX - layerOffsetX) / canvasScale;
     const logicalY = (pointerY - layerOffsetY) / canvasScale;
     const nextCanvasScale = fitScale * nextZoom;
@@ -524,14 +633,53 @@ export function AnnotationCanvas({
     const nextLayerOffsetX = Math.max(0, (nextStageWidth - nextScaledWorkspaceWidth) / 2);
     const nextLayerOffsetY = Math.max(0, (nextStageHeight - nextScaledWorkspaceHeight) / 2);
 
-    pendingScrollRef.current = {
-      left: Math.max(0, logicalX * nextCanvasScale + nextLayerOffsetX - (event.clientX - rect.left)),
-      top: Math.max(0, logicalY * nextCanvasScale + nextLayerOffsetY - (event.clientY - rect.top)),
+    const targetScroll = {
+      left: Math.max(0, logicalX * nextCanvasScale + nextLayerOffsetX - (originX - rect.left)),
+      top: Math.max(0, logicalY * nextCanvasScale + nextLayerOffsetY - (originY - rect.top)),
     };
 
     setZoom(nextZoom);
-  };
+    startZoomAnimation({ targetZoom: nextZoom, targetScroll });
+  }, [
+    canvasScale,
+    fitScale,
+    layerOffsetX,
+    layerOffsetY,
+    setZoom,
+    startZoomAnimation,
+    viewportHeight,
+    viewportSize.width,
+    zoom,
+  ]);
 
+  useWheel(({ event, first, intentional }) => {
+    if (!intentional || !draft.asset) {
+      return;
+    }
+
+    if (contextMenu.isOpen) {
+      closeContextMenu();
+    }
+
+    if (!shouldHandleCanvasZoomShortcut(event)) {
+      return;
+    }
+
+    if ('preventDefault' in event) {
+      event.preventDefault();
+    }
+
+    const nextZoom = getNextCanvasZoom({
+      currentZoom: zoom,
+      deltaY: event.deltaY,
+      minZoom: 0.5,
+      maxZoom: MAX_ZOOM,
+    });
+
+    applyZoomAtOrigin(nextZoom, event.clientX, event.clientY);
+  }, getCanvasWheelConfig({
+    target: viewportRef,
+  }));
   const handleStageMouseDown = (event: KonvaEventObject<MouseEvent>) => {
     if (
       readOnly ||
@@ -652,14 +800,6 @@ export function AnnotationCanvas({
     }
 
     switch (actionId) {
-      case 'edit':
-        if (annotation.tool === 'text') {
-          startInlineTextEdit(annotation.id);
-        } else {
-          setSelectedAnnotation(annotation.id);
-          closeContextMenu();
-        }
-        return;
       case 'edit-text':
         startInlineTextEdit(annotation.id);
         return;
@@ -726,7 +866,7 @@ export function AnnotationCanvas({
     const nextLayerOffsetX = Math.max(0, (nextStageWidth - nextScaledWorkspaceWidth) / 2);
     const nextLayerOffsetY = Math.max(0, (nextStageHeight - nextScaledWorkspaceHeight) / 2);
 
-    pendingScrollRef.current = getViewportScrollForWorkspacePoint({
+    const targetScroll = getViewportScrollForWorkspacePoint({
       target,
       canvasScale: nextCanvasScale,
       layerOffsetX: nextLayerOffsetX,
@@ -738,17 +878,17 @@ export function AnnotationCanvas({
     });
 
     if (nextZoom === zoom) {
-      viewport.scrollLeft = pendingScrollRef.current.left;
-      viewport.scrollTop = pendingScrollRef.current.top;
+      viewport.scrollLeft = targetScroll.left;
+      viewport.scrollTop = targetScroll.top;
       setScrollPosition({
-        left: pendingScrollRef.current.left,
-        top: pendingScrollRef.current.top,
+        left: targetScroll.left,
+        top: targetScroll.top,
       });
-      pendingScrollRef.current = null;
       return;
     }
 
     setZoom(nextZoom);
+    startZoomAnimation({ targetZoom: nextZoom, targetScroll });
   };
 
   const setViewportCenter = (nextZoom: number) => {
@@ -1009,31 +1149,7 @@ export function AnnotationCanvas({
     }
   };
 
-  const gridLines = useMemo(() => {
-    const lines: { key: string; points: number[]; stroke: string; strokeWidth: number }[] = [];
-
-    for (let x = 0; x <= WORKSPACE_WIDTH; x += GRID_SIZE) {
-      const isMajor = x % MAJOR_GRID_SIZE === 0;
-      lines.push({
-        key: `grid-v-${x}`,
-        points: [x, 0, x, WORKSPACE_HEIGHT],
-        stroke: isMajor ? '#cbd5e1' : '#e2e8f0',
-        strokeWidth: isMajor ? 1.2 : 1,
-      });
-    }
-
-    for (let y = 0; y <= WORKSPACE_HEIGHT; y += GRID_SIZE) {
-      const isMajor = y % MAJOR_GRID_SIZE === 0;
-      lines.push({
-        key: `grid-h-${y}`,
-        points: [0, y, WORKSPACE_WIDTH, y],
-        stroke: isMajor ? '#cbd5e1' : '#e2e8f0',
-        strokeWidth: isMajor ? 1.2 : 1,
-      });
-    }
-
-    return lines;
-  }, []);
+  const checkerboardStyle = useMemo(() => getCanvasCheckerboardStyle(), []);
 
   const actualSizeZoom = useMemo(() => {
     if (!draft.asset || !imageBounds || !fitScale) {
@@ -1097,78 +1213,72 @@ export function AnnotationCanvas({
             });
           }}
           onMouseDownCapture={handleMouseDownCapture}
-          onWheel={handleWheel}
         >
-          <Stage
-            ref={stageRef}
-            width={stageWidth}
-            height={stageHeight}
-            className="rounded-2xl"
-            onMouseDown={handleStageMouseDown}
-            onMouseMove={updatePreview}
-            onMouseUp={commitPreview}
-            onContextMenu={handleStageContextMenu}
-            onClick={(event) => {
-              if (didPanRef.current) {
-                didPanRef.current = false;
-                return;
-              }
+          <div className="relative" style={{ width: `${stageWidth}px`, height: `${stageHeight}px` }}>
+            <div className="pointer-events-none absolute inset-0 rounded-2xl" style={checkerboardStyle} />
 
-              if (contextMenu.isOpen) {
-                closeContextMenu();
-              }
+            <Stage
+              ref={stageRef}
+              width={stageWidth}
+              height={stageHeight}
+              className="relative rounded-2xl"
+              onMouseDown={handleStageMouseDown}
+              onMouseMove={updatePreview}
+              onMouseUp={commitPreview}
+              onContextMenu={handleStageContextMenu}
+              onClick={(event) => {
+                if (didPanRef.current) {
+                  didPanRef.current = false;
+                  return;
+                }
 
-              if (event.target === event.target.getStage()) {
-                setSelectedAnnotation(null);
-              }
-            }}
-          >
-            <Layer x={layerOffsetX} y={layerOffsetY} scaleX={canvasScale} scaleY={canvasScale}>
-              {gridLines.map((line) => (
-                <Line
-                  key={line.key}
-                  points={line.points}
-                  stroke={line.stroke}
-                  strokeWidth={line.strokeWidth}
-                  listening={false}
-                />
-              ))}
-              <Group
-                x={renderedDocumentPosition.x}
-                y={renderedDocumentPosition.y}
-                draggable={!readOnly && activeTool === 'select'}
-                dragBoundFunc={(position) => ({
-                  x: clamp(position.x, 0, WORKSPACE_WIDTH - DOCUMENT_WIDTH),
-                  y: clamp(position.y, 0, WORKSPACE_HEIGHT - DOCUMENT_HEIGHT),
-                })}
-                onDragMove={(event) => {
-                  const position = event.target.position();
-                  setAssetDragOffset({
-                    x: position.x - documentPosition.x,
-                    y: position.y - documentPosition.y,
-                  });
-                }}
-                onDragEnd={(event) => {
-                  const position = event.target.position();
-                  setAssetPosition(position.x, position.y);
-                  setAssetDragOffset(null);
-                }}
-              >
-                {image && imageBounds ? (
-                  <KonvaImage
-                    image={image}
-                    x={imageBounds.x}
-                    y={imageBounds.y}
-                    width={imageBounds.width}
-                    height={imageBounds.height}
-                    cornerRadius={18}
-                  />
-                ) : null}
-              </Group>
-              {draft.annotations.map((annotation) => renderAnnotation(annotation))}
-              {preview ? renderAnnotation(preview, true) : null}
-            </Layer>
-          </Stage>
+                if (contextMenu.isOpen) {
+                  closeContextMenu();
+                }
+
+                if (event.target === event.target.getStage()) {
+                  setSelectedAnnotation(null);
+                }
+              }}
+            >
+              <Layer x={layerOffsetX} y={layerOffsetY} scaleX={canvasScale} scaleY={canvasScale}>
+                <Group
+                  x={renderedDocumentPosition.x}
+                  y={renderedDocumentPosition.y}
+                  draggable={!readOnly && activeTool === 'select'}
+                  dragBoundFunc={(position) => ({
+                    x: clamp(position.x, 0, WORKSPACE_WIDTH - DOCUMENT_WIDTH),
+                    y: clamp(position.y, 0, WORKSPACE_HEIGHT - DOCUMENT_HEIGHT),
+                  })}
+                  onDragMove={(event) => {
+                    const position = event.target.position();
+                    setAssetDragOffset({
+                      x: position.x - documentPosition.x,
+                      y: position.y - documentPosition.y,
+                    });
+                  }}
+                  onDragEnd={(event) => {
+                    const position = event.target.position();
+                    setAssetPosition(position.x, position.y);
+                    setAssetDragOffset(null);
+                  }}
+                >
+                  {image && imageBounds ? (
+                    <KonvaImage
+                      image={image}
+                      x={imageBounds.x}
+                      y={imageBounds.y}
+                      width={imageBounds.width}
+                      height={imageBounds.height}
+                      cornerRadius={18}
+                    />
+                  ) : null}
+                </Group>
+                {draft.annotations.map((annotation) => renderAnnotation(annotation))}
+                {preview ? renderAnnotation(preview, true) : null}
+              </Layer>
+            </Stage>
+          </div>
         </div>
 
         {inlineTextEditor && inlineTextStyle ? (
