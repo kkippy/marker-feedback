@@ -1,17 +1,15 @@
 import type { ReactNode } from 'react';
+import type { AnnotationTool } from '@marker/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { localePreferences, useLocale, type LocalePreference } from '@/lib/locale';
 import { Download, MessageSquareMore, RotateCcw, Save, Share2 } from 'lucide-react';
-import { ToolPalette } from '@/components/editor/ToolPalette';
 
 export function TopBar(props: {
   annotationCount: number;
   threadCount: number;
   zoom: number;
-  activeTool?: Parameters<typeof ToolPalette>[0]['activeTool'];
-  onToolChange?: Parameters<typeof ToolPalette>[0]['onToolChange'];
-  textStyleControls?: ReactNode;
+  activeTool?: AnnotationTool;
   discussionPanel?: ReactNode;
   secondaryActions?: ReactNode;
   showSaveDraft?: boolean;
@@ -68,11 +66,11 @@ export function TopBar(props: {
       <div className="flex flex-wrap items-center gap-2">
         {props.secondaryActions}
 
-        {props.activeTool && props.onToolChange ? (
-          <ToolPalette activeTool={props.activeTool} onToolChange={props.onToolChange} />
+        {props.activeTool ? (
+          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600">
+            {messages.topBar.currentMode(messages.tools.labels[props.activeTool])}
+          </span>
         ) : null}
-
-        {props.textStyleControls}
 
         <Button
           type="button"

@@ -1,14 +1,17 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { AnnotationStyle } from '@marker/shared';
+import { FloatingTextStyleToolbar } from './FloatingTextStyleToolbar';
 import { getResizePreviewForHandle, type ResizeHandle, type TextFrame } from './textResizeScaling';
 
 const BASE_LINE_HEIGHT = 1.45;
@@ -55,6 +58,7 @@ export function InlineTextEditor({
   textStyle,
   canvasScale,
   onChange,
+  onTextStyleChange,
   onSizeChange,
   onFrameChange,
   onCommit,
@@ -67,6 +71,7 @@ export function InlineTextEditor({
   textStyle: AnnotationStyle;
   canvasScale: number;
   onChange: (value: string) => void;
+  onTextStyleChange: (patch: Partial<AnnotationStyle>) => void;
   onSizeChange: (size: { width: number; height: number }) => void;
   onFrameChange: (
     frame: Partial<{ x: number; y: number; width: number; height: number }> & {
@@ -83,6 +88,8 @@ export function InlineTextEditor({
   const interactionStateRef = useRef<InteractionState | null>(null);
   const resizePreviewRef = useRef<ResizePreviewState | null>(null);
   const [resizePreview, setResizePreview] = useState<ResizePreviewState | null>(null);
+  const [referenceElement, setReferenceElement] = useState<HTMLDivElement | null>(null);
+  const textareaId = useId();
   const fontSize = textStyle.fontSize ?? 14;
   const displayFontSize = resizePreview?.fontSize ?? fontSize;
   const fontWeight = textStyle.fontWeight ?? 'normal';
@@ -110,6 +117,10 @@ export function InlineTextEditor({
   const updateResizePreview = useCallback((nextPreview: ResizePreviewState | null) => {
     resizePreviewRef.current = nextPreview;
     setResizePreview(nextPreview);
+  }, []);
+
+  const handleEditorBoxRef = useCallback((node: HTMLDivElement | null) => {
+    setReferenceElement((current) => (current === node ? current : node));
   }, []);
 
   useLayoutEffect(() => {
@@ -287,155 +298,179 @@ export function InlineTextEditor({
     };
   };
 
+  const handleTextareaBlur = (event: ReactFocusEvent<HTMLTextAreaElement>) => {
+    const nextFocusedTarget = event.relatedTarget;
+
+    if (nextFocusedTarget instanceof Node && editorRef.current?.contains(nextFocusedTarget)) {
+      return;
+    }
+
+    onCommit();
+  };
+
   if (!isOpen) {
     return null;
   }
 
   return (
     <>
-      <div
-        ref={editorRef}
-        style={{
-          left: displayStyle.left,
-          top: displayStyle.top,
-          width: displayFrame.width * canvasScale,
-          height: displayFrame.height * canvasScale,
-        }}
-        className="absolute z-40 overflow-visible"
-      >
-        <textarea
-          ref={textareaRef}
-          autoFocus
-          value={value}
-          style={{
-            width: '100%',
-            height: '100%',
-            fontSize: scaledFontSize,
-            fontWeight: getCssFontWeight(fontWeight),
-            fontStyle: getCssFontStyle(fontStyle),
-            color: textColor,
-            lineHeight: `${scaledLineHeight}px`,
-            textDecoration,
-            backgroundColor: textBackgroundColor === 'transparent' ? 'transparent' : textBackgroundColor,
-          }}
-          className="resize-none overflow-hidden rounded-sm border border-dashed border-blue-500/80 bg-transparent p-0 caret-blue-600 shadow-none outline-none"
-          onChange={(event) => onChange(event.target.value)}
-          onBlur={onCommit}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) {
-              return;
-            }
-
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              onCommit();
-              return;
-            }
-
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
+      <div ref={editorRef} style={{ left: 0, top: 0 }} className="absolute z-40 overflow-visible">
+        <FloatingTextStyleToolbar
+          isOpen={isOpen}
+          reference={referenceElement}
+          style={textStyle}
+          onChange={onTextStyleChange}
+          onCommit={onCommit}
         />
 
-        <button
-          type="button"
-          aria-label="Move text box top border"
-          className="absolute cursor-move bg-transparent"
+        <div
+          ref={handleEditorBoxRef}
           style={{
-            left: FRAME_SEGMENT_INSET,
-            right: FRAME_SEGMENT_INSET,
-            top: -FRAME_DRAG_THICKNESS / 2,
-            height: FRAME_DRAG_THICKNESS,
+            left: displayStyle.left,
+            top: displayStyle.top,
+            width: displayFrame.width * canvasScale,
+            height: displayFrame.height * canvasScale,
           }}
-          onMouseDown={(event) => event.preventDefault()}
-          onPointerDown={startMove}
-        />
-        <button
-          type="button"
-          aria-label="Move text box bottom border"
-          className="absolute cursor-move bg-transparent"
-          style={{
-            left: FRAME_SEGMENT_INSET,
-            right: FRAME_SEGMENT_INSET,
-            bottom: -FRAME_DRAG_THICKNESS / 2,
-            height: FRAME_DRAG_THICKNESS,
-          }}
-          onMouseDown={(event) => event.preventDefault()}
-          onPointerDown={startMove}
-        />
-        <button
-          type="button"
-          aria-label="Move text box left border"
-          className="absolute cursor-move bg-transparent"
-          style={{
-            left: -FRAME_DRAG_THICKNESS / 2,
-            top: FRAME_SEGMENT_INSET,
-            bottom: FRAME_SEGMENT_INSET,
-            width: FRAME_DRAG_THICKNESS,
-          }}
-          onMouseDown={(event) => event.preventDefault()}
-          onPointerDown={startMove}
-        />
-        <button
-          type="button"
-          aria-label="Move text box right border"
-          className="absolute cursor-move bg-transparent"
-          style={{
-            right: -FRAME_DRAG_THICKNESS / 2,
-            top: FRAME_SEGMENT_INSET,
-            bottom: FRAME_SEGMENT_INSET,
-            width: FRAME_DRAG_THICKNESS,
-          }}
-          onMouseDown={(event) => event.preventDefault()}
-          onPointerDown={startMove}
-        />
-
-        {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const).map((handle) => (
-          <button
-            key={handle}
-            type="button"
-            aria-label={`Resize text box ${handle}`}
-            className={`
-              absolute rounded-full border border-blue-500 bg-white shadow-sm
-              ${handle === 'nw' ? 'cursor-nwse-resize' : ''}
-              ${handle === 'n' ? 'cursor-ns-resize' : ''}
-              ${handle === 'ne' ? 'cursor-nesw-resize' : ''}
-              ${handle === 'e' ? 'cursor-ew-resize' : ''}
-              ${handle === 's' ? 'cursor-ns-resize' : ''}
-              ${handle === 'sw' ? 'cursor-nesw-resize' : ''}
-              ${handle === 'w' ? 'cursor-ew-resize' : ''}
-              ${handle === 'se' ? 'cursor-nwse-resize' : ''}
-            `}
+          className="absolute overflow-visible"
+        >
+          <label htmlFor={textareaId} className="sr-only">
+            Text editor
+          </label>
+          <textarea
+            id={textareaId}
+            ref={textareaRef}
+            autoFocus
+            value={value}
             style={{
-              width: RESIZE_HANDLE_SIZE,
-              height: RESIZE_HANDLE_SIZE,
-              left:
-                handle === 'nw' || handle === 'w' || handle === 'sw'
-                  ? RESIZE_HANDLE_OFFSET
-                  : handle === 'n' || handle === 's'
-                    ? `calc(50% - ${RESIZE_HANDLE_SIZE / 2}px)`
-                    : undefined,
-              right:
-                handle === 'ne' || handle === 'e' || handle === 'se'
-                  ? RESIZE_HANDLE_OFFSET
-                  : undefined,
-              top:
-                handle === 'nw' || handle === 'n' || handle === 'ne'
-                  ? RESIZE_HANDLE_OFFSET
-                  : handle === 'e' || handle === 'w'
-                    ? `calc(50% - ${RESIZE_HANDLE_SIZE / 2}px)`
-                    : undefined,
-              bottom:
-                handle === 'sw' || handle === 's' || handle === 'se'
-                  ? RESIZE_HANDLE_OFFSET
-                  : undefined,
+              width: '100%',
+              height: '100%',
+              fontSize: scaledFontSize,
+              fontWeight: getCssFontWeight(fontWeight),
+              fontStyle: getCssFontStyle(fontStyle),
+              color: textColor,
+              lineHeight: `${scaledLineHeight}px`,
+              textDecoration,
+              backgroundColor: textBackgroundColor === 'transparent' ? 'transparent' : textBackgroundColor,
+            }}
+            className="resize-none overflow-hidden rounded-sm border border-dashed border-blue-500/80 bg-transparent p-0 caret-blue-600 shadow-none outline-none"
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={handleTextareaBlur}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) {
+                return;
+              }
+
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                onCommit();
+                return;
+              }
+
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+
+          <button
+            type="button"
+            aria-label="Move text box top border"
+            className="absolute cursor-move bg-transparent"
+            style={{
+              left: FRAME_SEGMENT_INSET,
+              right: FRAME_SEGMENT_INSET,
+              top: -FRAME_DRAG_THICKNESS / 2,
+              height: FRAME_DRAG_THICKNESS,
             }}
             onMouseDown={(event) => event.preventDefault()}
-            onPointerDown={startResize(handle)}
+            onPointerDown={startMove}
           />
-        ))}
+          <button
+            type="button"
+            aria-label="Move text box bottom border"
+            className="absolute cursor-move bg-transparent"
+            style={{
+              left: FRAME_SEGMENT_INSET,
+              right: FRAME_SEGMENT_INSET,
+              bottom: -FRAME_DRAG_THICKNESS / 2,
+              height: FRAME_DRAG_THICKNESS,
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={startMove}
+          />
+          <button
+            type="button"
+            aria-label="Move text box left border"
+            className="absolute cursor-move bg-transparent"
+            style={{
+              left: -FRAME_DRAG_THICKNESS / 2,
+              top: FRAME_SEGMENT_INSET,
+              bottom: FRAME_SEGMENT_INSET,
+              width: FRAME_DRAG_THICKNESS,
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={startMove}
+          />
+          <button
+            type="button"
+            aria-label="Move text box right border"
+            className="absolute cursor-move bg-transparent"
+            style={{
+              right: -FRAME_DRAG_THICKNESS / 2,
+              top: FRAME_SEGMENT_INSET,
+              bottom: FRAME_SEGMENT_INSET,
+              width: FRAME_DRAG_THICKNESS,
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={startMove}
+          />
+
+          {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const).map((handle) => (
+            <button
+              key={handle}
+              type="button"
+              aria-label={`Resize text box ${handle}`}
+              className={`
+                absolute rounded-full border border-blue-500 bg-white shadow-sm
+                ${handle === 'nw' ? 'cursor-nwse-resize' : ''}
+                ${handle === 'n' ? 'cursor-ns-resize' : ''}
+                ${handle === 'ne' ? 'cursor-nesw-resize' : ''}
+                ${handle === 'e' ? 'cursor-ew-resize' : ''}
+                ${handle === 's' ? 'cursor-ns-resize' : ''}
+                ${handle === 'sw' ? 'cursor-nesw-resize' : ''}
+                ${handle === 'w' ? 'cursor-ew-resize' : ''}
+                ${handle === 'se' ? 'cursor-nwse-resize' : ''}
+              `}
+              style={{
+                width: RESIZE_HANDLE_SIZE,
+                height: RESIZE_HANDLE_SIZE,
+                left:
+                  handle === 'nw' || handle === 'w' || handle === 'sw'
+                    ? RESIZE_HANDLE_OFFSET
+                    : handle === 'n' || handle === 's'
+                      ? `calc(50% - ${RESIZE_HANDLE_SIZE / 2}px)`
+                      : undefined,
+                right:
+                  handle === 'ne' || handle === 'e' || handle === 'se'
+                    ? RESIZE_HANDLE_OFFSET
+                    : undefined,
+                top:
+                  handle === 'nw' || handle === 'n' || handle === 'ne'
+                    ? RESIZE_HANDLE_OFFSET
+                    : handle === 'e' || handle === 'w'
+                      ? `calc(50% - ${RESIZE_HANDLE_SIZE / 2}px)`
+                      : undefined,
+                bottom:
+                  handle === 'sw' || handle === 's' || handle === 'se'
+                    ? RESIZE_HANDLE_OFFSET
+                    : undefined,
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+              onPointerDown={startResize(handle)}
+            />
+          ))}
+        </div>
       </div>
 
       <span

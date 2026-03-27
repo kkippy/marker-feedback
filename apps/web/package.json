@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@floating-ui/react-dom": "^2.1.8",
     "@marker/shared": "file:../../packages/shared",
     "@supabase/supabase-js": "^2.57.4",
     "clsx": "^2.1.1",

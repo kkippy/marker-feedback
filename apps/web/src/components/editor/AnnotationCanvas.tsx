@@ -146,6 +146,7 @@ export function AnnotationCanvas({
   const updateInlineTextValue = useEditorStore((state) => state.updateInlineTextValue);
   const updateInlineTextSize = useEditorStore((state) => state.updateInlineTextSize);
   const updateInlineTextFrame = useEditorStore((state) => state.updateInlineTextFrame);
+  const updateSelectedTextStyle = useEditorStore((state) => state.updateSelectedTextStyle);
   const commitInlineTextEditor = useEditorStore((state) => state.commitInlineTextEditor);
   const cancelInlineTextEditor = useEditorStore((state) => state.cancelInlineTextEditor);
   const image = useLoadedImage(draft.asset?.imageDataUrl);
@@ -1187,6 +1188,7 @@ export function AnnotationCanvas({
               top: inlineTextStyle.top,
             }}
             onChange={updateInlineTextValue}
+            onTextStyleChange={updateSelectedTextStyle}
             onSizeChange={updateInlineTextSize}
             onFrameChange={updateInlineTextFrame}
             onCommit={commitInlineTextEditor}

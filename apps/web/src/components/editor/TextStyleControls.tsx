@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { AnnotationStyle } from '@marker/shared';
 import { Bold, Italic, Pipette, Type, Underline } from 'lucide-react';
 import { HexColorInput, HexColorPicker } from 'react-colorful';
@@ -43,6 +43,17 @@ export function TextStyleControls({
   const textColor = style.textColor ?? '#0f172a';
   const textBackgroundColor = style.textBackgroundColor ?? 'transparent';
   const normalizedTextColor = useMemo(() => normalizeHexColor(textColor), [textColor]);
+  const createPressHandlers = (callback: () => void) => ({
+    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      callback();
+    },
+    onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (event.detail === 0) {
+        callback();
+      }
+    },
+  });
 
   useEffect(() => {
     if (!isColorPickerOpen) {
@@ -86,7 +97,7 @@ export function TextStyleControls({
             ? 'border-slate-900 bg-slate-900 text-white'
             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
         )}
-        onClick={() => onChange({ fontWeight: fontWeight === 'bold' ? 'normal' : 'bold' })}
+        {...createPressHandlers(() => onChange({ fontWeight: fontWeight === 'bold' ? 'normal' : 'bold' }))}
       >
         <Bold className="size-4" />
       </button>
@@ -100,7 +111,7 @@ export function TextStyleControls({
             ? 'border-slate-900 bg-slate-900 text-white'
             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
         )}
-        onClick={() => onChange({ fontStyle: fontStyle === 'italic' ? 'normal' : 'italic' })}
+        {...createPressHandlers(() => onChange({ fontStyle: fontStyle === 'italic' ? 'normal' : 'italic' }))}
       >
         <Italic className="size-4" />
       </button>
@@ -114,7 +125,9 @@ export function TextStyleControls({
             ? 'border-slate-900 bg-slate-900 text-white'
             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
         )}
-        onClick={() => onChange({ textDecoration: textDecoration === 'underline' ? 'none' : 'underline' })}
+        {...createPressHandlers(() =>
+          onChange({ textDecoration: textDecoration === 'underline' ? 'none' : 'underline' }),
+        )}
       >
         <Underline className="size-4" />
       </button>
@@ -129,7 +142,7 @@ export function TextStyleControls({
               'flex size-6 items-center justify-center rounded-full border transition',
               textColor === color ? 'border-slate-900' : 'border-transparent hover:border-slate-300',
             )}
-            onClick={() => onChange({ textColor: color })}
+            {...createPressHandlers(() => onChange({ textColor: color }))}
           >
             <span
               className="size-3.5 rounded-full border border-black/5"
@@ -146,7 +159,7 @@ export function TextStyleControls({
               'flex size-6 items-center justify-center rounded-full border bg-white text-slate-600 transition',
               isColorPickerOpen ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300',
             )}
-            onClick={() => setIsColorPickerOpen((current) => !current)}
+            {...createPressHandlers(() => setIsColorPickerOpen((current) => !current))}
           >
             <Pipette className="size-3.5" />
           </button>
@@ -196,10 +209,19 @@ export function TextStyleControls({
                 'flex size-6 items-center justify-center rounded-full border transition',
                 selected ? 'border-slate-900' : 'border-transparent hover:border-slate-300',
               )}
-              onClick={() => onChange({ textBackgroundColor: color })}
+              {...createPressHandlers(() => onChange({ textBackgroundColor: color }))}
             >
               {isTransparent ? (
-                <span className="text-xs font-semibold text-slate-400">×</span>
+                <span
+                  data-testid="clear-text-background-icon"
+                  className="relative block size-3.5 rounded-[4px] border border-slate-300 bg-[linear-gradient(135deg,transparent_0_44%,rgba(148,163,184,0.14)_44_56%,transparent_56_100%)]"
+                  aria-hidden
+                >
+                  <span
+                    data-testid="clear-text-background-slash"
+                    className="absolute left-1/2 top-1/2 h-[1.5px] w-[125%] -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-slate-500"
+                  />
+                </span>
               ) : (
                 <span
                   className="size-3.5 rounded-full border border-black/5"

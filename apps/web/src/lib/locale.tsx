@@ -28,6 +28,7 @@ export interface WebMessages {
     annotations: (count: number) => string;
     threads: (count: number) => string;
     zoom: (percent: number) => string;
+    currentMode: (label: string) => string;
     zoomOutAriaLabel: string;
     zoomInAriaLabel: string;
     reset: string;
@@ -47,6 +48,8 @@ export interface WebMessages {
     draftSummary: (annotationCount: number, hasAsset: boolean) => string;
 
     replaceImage: string;
+    undo: string;
+    redo: string;
   };
   comments: {
     title: string;
@@ -103,6 +106,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       annotations: (count) => `${count} annotations`,
       threads: (count) => `${count} threads`,
       zoom: (percent) => `Zoom ${percent}%`,
+      currentMode: (label) => `Mode: ${label}`,
       zoomOutAriaLabel: 'Zoom out',
       zoomInAriaLabel: 'Zoom in',
       reset: 'Reset',
@@ -124,6 +128,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
         `${annotationCount} annotations · ${hasAsset ? 'image ready' : 'missing asset'}`,
 
       replaceImage: 'Replace image',
+      undo: 'Undo',
+      redo: 'Redo',
     },
     comments: {
       title: 'Discussion',
@@ -187,6 +193,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       annotations: (count) => `${count} 条标注`,
       threads: (count) => `${count} 条讨论`,
       zoom: (percent) => `缩放 ${percent}%`,
+      currentMode: (label) => `当前：${label}`,
       zoomOutAriaLabel: '缩小',
       zoomInAriaLabel: '放大',
       reset: '重置',
@@ -207,6 +214,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
         `${annotationCount} 条标注 · ${hasAsset ? '图片已就绪' : '缺少图片资源'}`,
 
       replaceImage: '替换图片',
+      undo: '撤销',
+      redo: '重做',
     },
     comments: {
       title: '讨论',
