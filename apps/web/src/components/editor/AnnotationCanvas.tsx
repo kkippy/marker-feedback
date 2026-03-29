@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEventHandler } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEventHandler } from 'react';
 import { useWheel } from '@use-gesture/react';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { Arrow, Circle, Group, Image as KonvaImage, Layer, Rect, Stage, Text } from 'react-konva';
-import { createId, normalizeRect, type Annotation, type AnnotationGeometry } from '@marker/shared';
+import { Arrow, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import {
+  createId,
+  normalizeRect,
+  type Annotation,
+  type AnnotationGeometry,
+  type CalloutGeometry,
+  type EmbeddedImageAsset,
+  type ImageCalloutGeometry,
+  type RectGeometry,
+  type TextGeometry,
+} from '@marker/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -15,6 +25,7 @@ import { interpolateViewportTransition } from './canvasZoomMotion';
 import { getCanvasWheelConfig, getNextCanvasZoom, shouldHandleCanvasZoomShortcut } from './canvasZoomGesture';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
+import { FloatingImageCalloutToolbar } from './FloatingImageCalloutToolbar';
 import { getInlineTextOverlayStyle } from './inlineTextOverlay';
 import { InlineTextEditor } from './InlineTextEditor';
 import { getViewportScrollForWorkspacePoint } from './minimapNavigation';
@@ -28,6 +39,14 @@ const MAX_ZOOM = 6;
 const ZOOM_ANIMATION_DURATION_MS = 140;
 const PADDING = 0;
 const COPY_OFFSET = 24;
+const CALLOUT_TEXT_WIDTH = 180;
+const CALLOUT_TEXT_HEIGHT = 44;
+const CALLOUT_GAP = 36;
+const IMAGE_CALLOUT_PANEL_WIDTH = 180;
+const IMAGE_CALLOUT_PANEL_MIN_HEIGHT = 96;
+const IMAGE_CALLOUT_PANEL_MAX_HEIGHT = 180;
+const IMAGE_CALLOUT_PLACEHOLDER_HEIGHT = 120;
+const IMAGE_CALLOUT_PANEL_PADDING = 2;
 const getTextFontStyle = (style: Annotation['style']) => {
   const fontWeight = style.fontWeight ?? DEFAULT_TEXT_STYLE.fontWeight;
   const fontStyle = style.fontStyle ?? DEFAULT_TEXT_STYLE.fontStyle;
@@ -67,9 +86,24 @@ const getDefaultStyle = (tool: Annotation['tool']) =>
     ? { stroke: '#f59e0b', fill: 'rgba(251,191,36,0.25)', strokeWidth: 3 }
     : tool === 'blur'
       ? { stroke: '#0f172a', fill: 'rgba(15,23,42,0.45)', strokeWidth: 2 }
-      : tool === 'arrow'
-        ? { stroke: '#2563eb', strokeWidth: 4 }
-        : tool === 'marker'
+    : tool === 'arrow'
+      ? { stroke: '#2563eb', strokeWidth: 4 }
+      : tool === 'callout'
+        ? {
+            ...DEFAULT_TEXT_STYLE,
+            stroke: '#2563eb',
+            fill: 'rgba(255,255,255,0)',
+            strokeWidth: 3,
+            textBackgroundColor: '#ffffff',
+            textBoxMode: 'manual' as const,
+          }
+        : tool === 'image-callout'
+          ? {
+              stroke: '#2563eb',
+              fill: 'rgba(255,255,255,0)',
+              strokeWidth: 3,
+            }
+      : tool === 'marker'
           ? { stroke: '#2563eb', fill: '#2563eb', strokeWidth: 2 }
           : tool === 'text'
             ? { ...DEFAULT_TEXT_STYLE }
@@ -102,6 +136,34 @@ const offsetAnnotationGeometry = (geometry: AnnotationGeometry): AnnotationGeome
         x: geometry.x + COPY_OFFSET,
         y: geometry.y + COPY_OFFSET,
       };
+    case 'callout':
+      return {
+        ...geometry,
+        target: {
+          ...geometry.target,
+          x: geometry.target.x + COPY_OFFSET,
+          y: geometry.target.y + COPY_OFFSET,
+        },
+        text: {
+          ...geometry.text,
+          x: geometry.text.x + COPY_OFFSET,
+          y: geometry.text.y + COPY_OFFSET,
+        },
+      };
+    case 'image-callout':
+      return {
+        ...geometry,
+        target: {
+          ...geometry.target,
+          x: geometry.target.x + COPY_OFFSET,
+          y: geometry.target.y + COPY_OFFSET,
+        },
+        panel: {
+          ...geometry.panel,
+          x: geometry.panel.x + COPY_OFFSET,
+          y: geometry.panel.y + COPY_OFFSET,
+        },
+      };
     case 'arrow':
       return {
         ...geometry,
@@ -117,6 +179,270 @@ const offsetAnnotationGeometry = (geometry: AnnotationGeometry): AnnotationGeome
   }
 };
 
+const measureImageDataUrl = (imageDataUrl: string) =>
+  new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => resolve({ width: image.width, height: image.height });
+    image.onerror = reject;
+    image.src = imageDataUrl;
+  });
+
+const fitImageIntoFrame = (
+  imageWidth: number,
+  imageHeight: number,
+  frameWidth: number,
+  frameHeight: number,
+) => {
+  const scale = Math.min(frameWidth / imageWidth, frameHeight / imageHeight);
+  const width = imageWidth * scale;
+  const height = imageHeight * scale;
+
+  return {
+    x: (frameWidth - width) / 2,
+    y: (frameHeight - height) / 2,
+    width,
+    height,
+  };
+};
+
+const createCalloutTextFrame = (target: RectGeometry): TextGeometry => {
+  const preferredRightX = target.x + target.width + CALLOUT_GAP;
+  const fallbackLeftX = Math.max(0, target.x - CALLOUT_TEXT_WIDTH - CALLOUT_GAP);
+  const x =
+    preferredRightX + CALLOUT_TEXT_WIDTH <= DOCUMENT_WIDTH ? preferredRightX : fallbackLeftX;
+  const y = clamp(target.y - 4, 0, Math.max(0, DOCUMENT_HEIGHT - CALLOUT_TEXT_HEIGHT));
+
+  return {
+    kind: 'text',
+    x,
+    y,
+    width: CALLOUT_TEXT_WIDTH,
+    height: CALLOUT_TEXT_HEIGHT,
+  };
+};
+
+const createCalloutGeometry = (target: RectGeometry): CalloutGeometry => ({
+  kind: 'callout',
+  target,
+  text: createCalloutTextFrame(target),
+});
+
+const getCalloutEdgePoint = (
+  source: { x: number; y: number; width: number; height: number },
+  target: { x: number; y: number; width: number; height: number },
+) => {
+  const sourceCenterX = source.x + source.width / 2;
+  const sourceCenterY = source.y + source.height / 2;
+  const targetCenterX = target.x + target.width / 2;
+  const targetCenterY = target.y + target.height / 2;
+  const deltaX = targetCenterX - sourceCenterX;
+  const deltaY = targetCenterY - sourceCenterY;
+
+  if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+    return {
+      x: deltaX >= 0 ? source.x + source.width : source.x,
+      y: sourceCenterY,
+    };
+  }
+
+  return {
+    x: sourceCenterX,
+    y: deltaY >= 0 ? source.y + source.height : source.y,
+  };
+};
+
+const getCalloutConnectorPoints = (geometry: CalloutGeometry | ImageCalloutGeometry) => {
+  const panel = geometry.kind === 'callout' ? geometry.text : geometry.panel;
+  const start = getCalloutEdgePoint(geometry.target, panel);
+  const end = getCalloutEdgePoint(panel, geometry.target);
+
+  return [start.x, start.y, end.x, end.y];
+};
+
+const getCalloutBounds = (geometry: CalloutGeometry) => {
+  const left = Math.min(geometry.target.x, geometry.text.x);
+  const top = Math.min(geometry.target.y, geometry.text.y);
+  const right = Math.max(
+    geometry.target.x + geometry.target.width,
+    geometry.text.x + geometry.text.width,
+  );
+  const bottom = Math.max(
+    geometry.target.y + geometry.target.height,
+    geometry.text.y + geometry.text.height,
+  );
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
+};
+
+const getRelativeCalloutGeometry = (geometry: CalloutGeometry, origin: { x: number; y: number }): CalloutGeometry => ({
+  ...geometry,
+  target: {
+    ...geometry.target,
+    x: geometry.target.x - origin.x,
+    y: geometry.target.y - origin.y,
+  },
+  text: {
+    ...geometry.text,
+    x: geometry.text.x - origin.x,
+    y: geometry.text.y - origin.y,
+  },
+});
+
+const getImageCalloutPanelHeight = (imageWidth?: number, imageHeight?: number) => {
+  if (!imageWidth || !imageHeight) {
+    return IMAGE_CALLOUT_PLACEHOLDER_HEIGHT;
+  }
+
+  return clamp(
+    Math.round((IMAGE_CALLOUT_PANEL_WIDTH * imageHeight) / imageWidth),
+    IMAGE_CALLOUT_PANEL_MIN_HEIGHT,
+    IMAGE_CALLOUT_PANEL_MAX_HEIGHT,
+  );
+};
+
+const createImageCalloutPanelFrame = (
+  target: RectGeometry,
+  imageDimensions?: { width: number; height: number },
+): RectGeometry => {
+  const panelHeight = getImageCalloutPanelHeight(imageDimensions?.width, imageDimensions?.height);
+  const preferredRightX = target.x + target.width + CALLOUT_GAP;
+  const fallbackLeftX = Math.max(0, target.x - IMAGE_CALLOUT_PANEL_WIDTH - CALLOUT_GAP);
+  const x =
+    preferredRightX + IMAGE_CALLOUT_PANEL_WIDTH <= DOCUMENT_WIDTH ? preferredRightX : fallbackLeftX;
+  const y = clamp(target.y - 4, 0, Math.max(0, DOCUMENT_HEIGHT - panelHeight));
+
+  return {
+    kind: 'rect',
+    x,
+    y,
+    width: IMAGE_CALLOUT_PANEL_WIDTH,
+    height: panelHeight,
+  };
+};
+
+const createImageCalloutGeometry = (
+  target: RectGeometry,
+  imageDimensions?: { width: number; height: number },
+): ImageCalloutGeometry => ({
+  kind: 'image-callout',
+  target,
+  panel: createImageCalloutPanelFrame(target, imageDimensions),
+});
+
+const applyImageDimensionsToCalloutGeometry = (
+  geometry: ImageCalloutGeometry,
+  imageDimensions?: { width: number; height: number },
+): ImageCalloutGeometry => {
+  const panelHeight = getImageCalloutPanelHeight(imageDimensions?.width, imageDimensions?.height);
+
+  return {
+    ...geometry,
+    panel: {
+      ...geometry.panel,
+      height: panelHeight,
+      y: clamp(geometry.panel.y, 0, Math.max(0, DOCUMENT_HEIGHT - panelHeight)),
+    },
+  };
+};
+
+const getImageCalloutBounds = (geometry: ImageCalloutGeometry) => {
+  const left = Math.min(geometry.target.x, geometry.panel.x);
+  const top = Math.min(geometry.target.y, geometry.panel.y);
+  const right = Math.max(
+    geometry.target.x + geometry.target.width,
+    geometry.panel.x + geometry.panel.width,
+  );
+  const bottom = Math.max(
+    geometry.target.y + geometry.target.height,
+    geometry.panel.y + geometry.panel.height,
+  );
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
+};
+
+const getRelativeImageCalloutGeometry = (
+  geometry: ImageCalloutGeometry,
+  origin: { x: number; y: number },
+): ImageCalloutGeometry => ({
+  ...geometry,
+  target: {
+    ...geometry.target,
+    x: geometry.target.x - origin.x,
+    y: geometry.target.y - origin.y,
+  },
+  panel: {
+    ...geometry.panel,
+    x: geometry.panel.x - origin.x,
+    y: geometry.panel.y - origin.y,
+  },
+});
+
+function ImageCalloutPanel({
+  src,
+  panel,
+}: {
+  src?: string;
+  panel: RectGeometry;
+}) {
+  const image = useLoadedImage(src);
+
+  if (!image) {
+    return (
+      <>
+        <Rect
+          width={panel.width}
+          height={panel.height}
+          fill="#f8fafc"
+          cornerRadius={12}
+        />
+        <Text
+          x={14}
+          y={panel.height / 2 - 8}
+          width={Math.max(0, panel.width - 28)}
+          text={src ? 'Loading image...' : 'Image unavailable'}
+          fontSize={12}
+          fill="#64748b"
+          align="center"
+        />
+      </>
+    );
+  }
+
+  const fit = fitImageIntoFrame(
+    image.width,
+    image.height,
+    Math.max(0, panel.width - IMAGE_CALLOUT_PANEL_PADDING * 2),
+    Math.max(0, panel.height - IMAGE_CALLOUT_PANEL_PADDING * 2),
+  );
+
+  return (
+    <KonvaImage
+      image={image}
+      x={IMAGE_CALLOUT_PANEL_PADDING + fit.x}
+      y={IMAGE_CALLOUT_PANEL_PADDING + fit.y}
+      width={fit.width}
+      height={fit.height}
+      cornerRadius={11}
+    />
+  );
+}
+
+interface ImageCalloutDialogState {
+  mode: 'create' | 'replace' | null;
+  pendingGeometry: ImageCalloutGeometry | null;
+  replaceAnnotationId: string | null;
+}
+
 export function AnnotationCanvas({
   readOnly = false,
   onExportReady,
@@ -127,8 +453,14 @@ export function AnnotationCanvas({
   const { messages } = useLocale();
   const frameRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const imageCalloutFileRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<any>(null);
   const hasInitializedViewRef = useRef(false);
+  const imageCalloutDialogStateRef = useRef<ImageCalloutDialogState>({
+    mode: null,
+    pendingGeometry: null,
+    replaceAnnotationId: null,
+  });
   const draft = useEditorStore((state) => state.draft);
   const activeTool = useEditorStore((state) => state.activeTool);
   const selectedAnnotationId = useEditorStore((state) => state.selectedAnnotationId);
@@ -138,6 +470,7 @@ export function AnnotationCanvas({
   const setZoom = useEditorStore((state) => state.setZoom);
   const setActiveTool = useEditorStore((state) => state.setActiveTool);
   const addAnnotation = useEditorStore((state) => state.addAnnotation);
+  const addImageCalloutAnnotation = useEditorStore((state) => state.addImageCalloutAnnotation);
   const updateAnnotation = useEditorStore((state) => state.updateAnnotation);
   const commitDraft = useEditorStore((state) => state.commitDraft);
   const setAssetPosition = useEditorStore((state) => state.setAssetPosition);
@@ -145,7 +478,9 @@ export function AnnotationCanvas({
   const openContextMenu = useEditorStore((state) => state.openContextMenu);
   const closeContextMenu = useEditorStore((state) => state.closeContextMenu);
   const startInlineTextCreate = useEditorStore((state) => state.startInlineTextCreate);
+  const startInlineCalloutCreate = useEditorStore((state) => state.startInlineCalloutCreate);
   const startInlineTextEdit = useEditorStore((state) => state.startInlineTextEdit);
+  const startInlineCalloutEdit = useEditorStore((state) => state.startInlineCalloutEdit);
   const updateInlineTextValue = useEditorStore((state) => state.updateInlineTextValue);
   const updateInlineTextSize = useEditorStore((state) => state.updateInlineTextSize);
   const updateInlineTextFrame = useEditorStore((state) => state.updateInlineTextFrame);
@@ -160,6 +495,21 @@ export function AnnotationCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [assetDragOffset, setAssetDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [hoveredTextAnnotationId, setHoveredTextAnnotationId] = useState<string | null>(null);
+  const [hoveredCalloutGroupId, setHoveredCalloutGroupId] = useState<string | null>(null);
+  const [isDraggingCalloutGroup, setIsDraggingCalloutGroup] = useState(false);
+  const [draggingCalloutTargetFrame, setDraggingCalloutTargetFrame] = useState<{
+    annotationId: string;
+    target: RectGeometry;
+  } | null>(null);
+  const [draggingCalloutTextFrame, setDraggingCalloutTextFrame] = useState<{
+    annotationId: string;
+    text: TextGeometry;
+  } | null>(null);
+  const [draggingImageCalloutPanelFrame, setDraggingImageCalloutPanelFrame] = useState<{
+    annotationId: string;
+    panel: RectGeometry;
+  } | null>(null);
+  const [pendingImageCalloutGeometry, setPendingImageCalloutGeometry] = useState<ImageCalloutGeometry | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ left: 0, top: 0 });
   const [displayZoom, setDisplayZoom] = useState(zoom);
   const documentOrigin = useMemo(
@@ -240,6 +590,10 @@ export function AnnotationCanvas({
     const annotation = draft.annotations.find((item) => item.id === target.annotationId);
     return annotation ? getContextMenuItems({ kind: 'annotation', annotation }, messages.contextMenu) : [];
   }, [contextMenu.target, draft.annotations, messages.contextMenu]);
+  const embeddedAssetsById = useMemo(
+    () => new Map(draft.embeddedAssets.map((asset) => [asset.id, asset])),
+    [draft.embeddedAssets],
+  );
   const inlineTextStyle = useMemo(() => {
     if (!inlineTextEditor) {
       return null;
@@ -261,6 +615,68 @@ export function AnnotationCanvas({
       scrollTop: scrollPosition.top,
     });
   }, [canvasScale, inlineTextEditor, layerOffsetX, layerOffsetY, renderedDocumentPosition, scrollPosition.left, scrollPosition.top]);
+  const selectedImageCallout = useMemo<{
+    annotation: Annotation;
+    geometry: ImageCalloutGeometry;
+  } | null>(() => {
+    if (!selectedAnnotationId) {
+      return null;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === selectedAnnotationId);
+
+    if (!annotation || annotation.tool !== 'image-callout' || annotation.geometry.kind !== 'image-callout') {
+      return null;
+    }
+
+    return {
+      annotation,
+      geometry: annotation.geometry,
+    };
+  }, [draft.annotations, selectedAnnotationId]);
+  const selectedImageCalloutToolbarStyle = useMemo(() => {
+    if (!selectedImageCallout) {
+      return null;
+    }
+
+    const { panel } = selectedImageCallout.geometry;
+
+    return {
+      left: (renderedDocumentPosition.x + panel.x) * canvasScale + layerOffsetX - scrollPosition.left,
+      top: (renderedDocumentPosition.y + panel.y) * canvasScale + layerOffsetY - scrollPosition.top,
+    };
+  }, [
+    canvasScale,
+    layerOffsetX,
+    layerOffsetY,
+    renderedDocumentPosition.x,
+    renderedDocumentPosition.y,
+    scrollPosition.left,
+    scrollPosition.top,
+    selectedImageCallout,
+  ]);
+  const pendingInlineCalloutGeometry = useMemo<CalloutGeometry | null>(() => {
+    if (
+      !inlineTextEditor ||
+      inlineTextEditor.annotationTool !== 'callout' ||
+      inlineTextEditor.mode !== 'create' ||
+      !inlineTextEditor.calloutTarget
+    ) {
+      return null;
+    }
+
+    return {
+      kind: 'callout',
+      target: inlineTextEditor.calloutTarget,
+      text: {
+        kind: 'text',
+        x: inlineTextEditor.x,
+        y: inlineTextEditor.y,
+        width: inlineTextEditor.width,
+        height: inlineTextEditor.height,
+      },
+    };
+  }, [inlineTextEditor]);
   const zoomAnimationFrameRef = useRef<number | null>(null);
   const zoomAnimationRef = useRef<{
     startTime: number;
@@ -312,6 +728,17 @@ export function AnnotationCanvas({
   useEffect(() => {
     hasInitializedViewRef.current = false;
     setAssetDragOffset(null);
+    setHoveredCalloutGroupId(null);
+    setIsDraggingCalloutGroup(false);
+    setDraggingCalloutTargetFrame(null);
+    setDraggingCalloutTextFrame(null);
+    setDraggingImageCalloutPanelFrame(null);
+    setPendingImageCalloutGeometry(null);
+    imageCalloutDialogStateRef.current = {
+      mode: null,
+      pendingGeometry: null,
+      replaceAnnotationId: null,
+    };
     setDisplayZoom(zoom);
   }, [draft.asset?.id]);
 
@@ -565,6 +992,107 @@ export function AnnotationCanvas({
 
   const markerCount = draft.annotations.filter((annotation) => annotation.tool === 'marker').length + 1;
 
+  const resetImageCalloutDialogState = () => {
+    setPendingImageCalloutGeometry(null);
+    imageCalloutDialogStateRef.current = {
+      mode: null,
+      pendingGeometry: null,
+      replaceAnnotationId: null,
+    };
+  };
+
+  const openImageCalloutPicker = ({
+    mode,
+    geometry,
+    annotationId,
+  }: {
+    mode: 'create' | 'replace';
+    geometry: ImageCalloutGeometry;
+    annotationId?: string;
+  }) => {
+    const input = imageCalloutFileRef.current;
+
+    setPendingImageCalloutGeometry(mode === 'create' ? geometry : null);
+    imageCalloutDialogStateRef.current = {
+      mode,
+      pendingGeometry: geometry,
+      replaceAnnotationId: annotationId ?? null,
+    };
+
+    if (!input) {
+      return;
+    }
+
+    input.value = '';
+    input.click();
+  };
+
+  const handleImageCalloutFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const dialogState = imageCalloutDialogStateRef.current;
+    const geometry = dialogState.pendingGeometry;
+    const asset = draft.asset;
+
+    if (!file || !geometry || !asset) {
+      resetImageCalloutDialogState();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const imageDataUrl = reader.result as string;
+        const dimensions = await measureImageDataUrl(imageDataUrl);
+        const embeddedAsset: EmbeddedImageAsset = {
+          id: createId('embedded-asset'),
+          imageDataUrl,
+          width: dimensions.width,
+          height: dimensions.height,
+          createdAt: new Date().toISOString(),
+        };
+
+        if (dialogState.mode === 'replace' && dialogState.replaceAnnotationId) {
+          commitDraft((nextDraft) => {
+            nextDraft.embeddedAssets.push(embeddedAsset);
+            const annotation = nextDraft.annotations.find(
+              (item) => item.id === dialogState.replaceAnnotationId,
+            );
+
+            if (!annotation || annotation.geometry.kind !== 'image-callout') {
+              return;
+            }
+
+            annotation.imageAssetId = embeddedAsset.id;
+            annotation.geometry = applyImageDimensionsToCalloutGeometry(
+              annotation.geometry,
+              dimensions,
+            );
+          });
+        } else {
+          const annotation: Annotation = {
+            id: createId('annotation'),
+            assetId: asset.id,
+            tool: 'image-callout',
+            geometry: applyImageDimensionsToCalloutGeometry(geometry, dimensions),
+            imageAssetId: embeddedAsset.id,
+            style: {
+              stroke: '#2563eb',
+              fill: 'rgba(255,255,255,0)',
+              strokeWidth: 3,
+            },
+            createdAt: new Date().toISOString(),
+          };
+
+          addImageCalloutAnnotation(annotation, embeddedAsset);
+          setActiveTool('select');
+        }
+      } finally {
+        resetImageCalloutDialogState();
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const startPanning = (clientX: number, clientY: number) => {
     const viewport = viewportRef.current;
 
@@ -724,6 +1252,16 @@ export function AnnotationCanvas({
       return;
     }
 
+    if (activeTool === 'callout') {
+      setDragStart(pointer);
+      return;
+    }
+
+    if (activeTool === 'image-callout') {
+      setDragStart(pointer);
+      return;
+    }
+
     setDragStart(pointer);
   };
 
@@ -781,7 +1319,14 @@ export function AnnotationCanvas({
       return;
     }
 
-    if (actionId === 'rectangle' || actionId === 'arrow' || actionId === 'highlight' || actionId === 'marker') {
+    if (
+      actionId === 'rectangle' ||
+      actionId === 'arrow' ||
+      actionId === 'highlight' ||
+      actionId === 'marker' ||
+      actionId === 'callout' ||
+      actionId === 'image-callout'
+    ) {
       setActiveTool(actionId);
       closeContextMenu();
       return;
@@ -801,7 +1346,23 @@ export function AnnotationCanvas({
 
     switch (actionId) {
       case 'edit-text':
+        if (annotation.tool === 'callout') {
+          startInlineCalloutEdit(annotation.id);
+          return;
+        }
         startInlineTextEdit(annotation.id);
+        return;
+      case 'replace-image':
+        if (annotation.tool === 'image-callout' && annotation.geometry.kind === 'image-callout') {
+          closeContextMenu();
+          openImageCalloutPicker({
+            mode: 'replace',
+            geometry: annotation.geometry,
+            annotationId: annotation.id,
+          });
+          return;
+        }
+        closeContextMenu();
         return;
       case 'copy':
         commitDraft((nextDraft) => {
@@ -823,6 +1384,12 @@ export function AnnotationCanvas({
       case 'delete':
         commitDraft((nextDraft) => {
           nextDraft.annotations = nextDraft.annotations.filter((item) => item.id !== annotation.id);
+          const usedAssetIds = new Set(
+            nextDraft.annotations
+              .map((item) => item.imageAssetId)
+              .filter((assetId): assetId is string => Boolean(assetId)),
+          );
+          nextDraft.embeddedAssets = nextDraft.embeddedAssets.filter((asset) => usedAssetIds.has(asset.id));
         });
         setSelectedAnnotation(null);
         closeContextMenu();
@@ -844,6 +1411,62 @@ export function AnnotationCanvas({
         closeContextMenu();
     }
   };
+
+  const handleReplaceImageCallout = useCallback(() => {
+    if (
+      !selectedImageCallout
+    ) {
+      return;
+    }
+
+    openImageCalloutPicker({
+      mode: 'replace',
+      geometry: selectedImageCallout.geometry,
+      annotationId: selectedImageCallout.annotation.id,
+    });
+  }, [selectedImageCallout]);
+
+  const handleCopySelectedImageCallout = useCallback(() => {
+    if (!selectedImageCallout) {
+      return;
+    }
+
+    commitDraft((nextDraft) => {
+      const current = nextDraft.annotations.find((item) => item.id === selectedImageCallout.annotation.id);
+
+      if (!current) {
+        return;
+      }
+
+      nextDraft.annotations.push({
+        ...current,
+        id: createId('annotation'),
+        geometry: offsetAnnotationGeometry(current.geometry),
+        createdAt: new Date().toISOString(),
+      });
+    });
+  }, [commitDraft, selectedImageCallout]);
+
+  const handleDeleteSelectedImageCallout = useCallback(() => {
+    if (!selectedImageCallout) {
+      return;
+    }
+
+    commitDraft((nextDraft) => {
+      nextDraft.annotations = nextDraft.annotations.filter(
+        (item) => item.id !== selectedImageCallout.annotation.id,
+      );
+      const usedAssetIds = new Set(
+        nextDraft.annotations
+          .map((item) => item.imageAssetId)
+          .filter((assetId): assetId is string => Boolean(assetId)),
+      );
+      nextDraft.embeddedAssets = nextDraft.embeddedAssets.filter((asset) =>
+        usedAssetIds.has(asset.id),
+      );
+    });
+    setSelectedAnnotation(null);
+  }, [commitDraft, selectedImageCallout, setSelectedAnnotation]);
 
   const scrollViewportToWorkspacePoint = (
     target: { x: number; y: number },
@@ -924,7 +1547,16 @@ export function AnnotationCanvas({
     }
 
     if (preview) {
-      addAnnotation(preview);
+      if (preview.tool === 'callout' && preview.geometry.kind === 'callout') {
+        startInlineCalloutCreate(preview.geometry);
+      } else if (preview.tool === 'image-callout' && preview.geometry.kind === 'image-callout') {
+        openImageCalloutPicker({
+          mode: 'create',
+          geometry: preview.geometry,
+        });
+      } else {
+        addAnnotation(preview);
+      }
     }
 
     setPreview(null);
@@ -955,7 +1587,11 @@ export function AnnotationCanvas({
             kind: 'arrow' as const,
             points: [dragStart.x, dragStart.y, pointer.x, pointer.y] as [number, number, number, number],
           }
-        : normalizeRect({ x1: dragStart.x, y1: dragStart.y, x2: pointer.x, y2: pointer.y });
+        : activeTool === 'callout'
+          ? createCalloutGeometry(normalizeRect({ x1: dragStart.x, y1: dragStart.y, x2: pointer.x, y2: pointer.y }))
+          : activeTool === 'image-callout'
+            ? createImageCalloutGeometry(normalizeRect({ x1: dragStart.x, y1: dragStart.y, x2: pointer.x, y2: pointer.y }))
+          : normalizeRect({ x1: dragStart.x, y1: dragStart.y, x2: pointer.x, y2: pointer.y });
 
     setPreview(
       buildAnnotation(activeTool as Annotation['tool'], geometry, draft.asset.id, draft.annotations.length + 1),
@@ -1144,6 +1780,406 @@ export function AnnotationCanvas({
         );
       }
 
+      case 'callout': {
+        if (geometry.kind !== 'callout') {
+          return null;
+        }
+
+        const isEditingCurrentCallout = inlineTextEditor?.annotationId === annotation.id;
+        const renderedGeometry =
+          isEditingCurrentCallout
+            ? {
+                ...geometry,
+                text: {
+                  kind: 'text' as const,
+                  x: inlineTextEditor.x,
+                  y: inlineTextEditor.y,
+                  width: inlineTextEditor.width,
+                  height: inlineTextEditor.height,
+                },
+              }
+            : {
+                ...geometry,
+                ...(draggingCalloutTargetFrame?.annotationId === annotation.id
+                  ? { target: draggingCalloutTargetFrame.target }
+                  : {}),
+                ...(draggingCalloutTextFrame?.annotationId === annotation.id
+                  ? { text: draggingCalloutTextFrame.text }
+                  : {}),
+              };
+        const calloutBounds = getCalloutBounds(renderedGeometry);
+        const relativeGeometry = getRelativeCalloutGeometry(renderedGeometry, calloutBounds);
+        const connectorPoints = getCalloutConnectorPoints(relativeGeometry);
+        const textBackgroundColor = annotation.style.textBackgroundColor ?? '#ffffff';
+        const borderColor = selected ? '#2563eb' : '#94a3b8';
+        const groupX = renderedDocumentPosition.x + calloutBounds.x;
+        const groupY = renderedDocumentPosition.y + calloutBounds.y;
+
+        return (
+          <Group
+            key={annotation.id}
+            x={groupX}
+            y={groupY}
+            draggable={!readOnly && activeTool === 'select' && !isPreview}
+            {...commonProps}
+            onMouseEnter={() => {
+              if (!readOnly && activeTool === 'select' && !isEditingCurrentCallout) {
+                setHoveredCalloutGroupId(annotation.id);
+              }
+            }}
+            onMouseLeave={() => {
+              if (hoveredCalloutGroupId === annotation.id) {
+                setHoveredCalloutGroupId(null);
+              }
+            }}
+            onDragStart={() => {
+              setIsDraggingCalloutGroup(true);
+              setHoveredCalloutGroupId(annotation.id);
+            }}
+            onDragEnd={(event) => {
+              const pos = event.target.position();
+              const deltaX = pos.x - groupX;
+              const deltaY = pos.y - groupY;
+              setIsDraggingCalloutGroup(false);
+              setHoveredCalloutGroupId(null);
+              setDraggingCalloutTargetFrame(null);
+              setDraggingCalloutTextFrame(null);
+
+              updateAnnotation(annotation.id, (current) => {
+                if (current.geometry.kind === 'callout') {
+                  current.geometry = {
+                    ...current.geometry,
+                    target: {
+                      ...current.geometry.target,
+                      x: current.geometry.target.x + deltaX,
+                      y: current.geometry.target.y + deltaY,
+                    },
+                    text: {
+                      ...current.geometry.text,
+                      x: current.geometry.text.x + deltaX,
+                      y: current.geometry.text.y + deltaY,
+                    },
+                  };
+                }
+              });
+            }}
+          >
+            <Group
+              x={relativeGeometry.target.x}
+              y={relativeGeometry.target.y}
+              draggable={!readOnly && activeTool === 'select' && selected && !isPreview}
+              onDragStart={(event) => {
+                event.cancelBubble = true;
+                setSelectedAnnotation(annotation.id);
+              }}
+              onDragMove={(event) => {
+                const position = event.target.position();
+                setDraggingCalloutTargetFrame({
+                  annotationId: annotation.id,
+                  target: {
+                    ...renderedGeometry.target,
+                    x: calloutBounds.x + position.x,
+                    y: calloutBounds.y + position.y,
+                  },
+                });
+              }}
+              onDragEnd={(event) => {
+                event.cancelBubble = true;
+                const position = event.target.position();
+                setDraggingCalloutTargetFrame(null);
+                updateAnnotation(annotation.id, (current) => {
+                  if (current.geometry.kind === 'callout') {
+                    current.geometry = {
+                      ...current.geometry,
+                      target: {
+                        ...current.geometry.target,
+                        x: calloutBounds.x + position.x,
+                        y: calloutBounds.y + position.y,
+                      },
+                    };
+                  }
+                });
+              }}
+            >
+              <Rect
+                width={relativeGeometry.target.width}
+                height={relativeGeometry.target.height}
+                stroke={annotation.style.stroke}
+                strokeWidth={(annotation.style.strokeWidth ?? 3) + (selected ? 1 : 0)}
+                fill={annotation.style.fill ?? 'rgba(255,255,255,0)'}
+                cornerRadius={10}
+              />
+            </Group>
+            <Line
+              points={connectorPoints}
+              stroke={annotation.style.stroke}
+              strokeWidth={(annotation.style.strokeWidth ?? 3) + (selected ? 1 : 0)}
+              lineCap="round"
+              lineJoin="round"
+              hitStrokeWidth={12}
+            />
+            {isEditingCurrentCallout ? null : (
+              <Group
+                x={relativeGeometry.text.x}
+                y={relativeGeometry.text.y}
+                draggable={!readOnly && activeTool === 'select' && selected && !isPreview}
+                onDragStart={(event) => {
+                  event.cancelBubble = true;
+                  setSelectedAnnotation(annotation.id);
+                }}
+                onDblClick={(event) => {
+                  event.cancelBubble = true;
+                  if (!readOnly) {
+                    startInlineCalloutEdit(annotation.id);
+                  }
+                }}
+                onDblTap={(event) => {
+                  event.cancelBubble = true;
+                  if (!readOnly) {
+                    startInlineCalloutEdit(annotation.id);
+                  }
+                }}
+                onDragMove={(event) => {
+                  const position = event.target.position();
+                  setDraggingCalloutTextFrame({
+                    annotationId: annotation.id,
+                    text: {
+                      ...renderedGeometry.text,
+                      x: calloutBounds.x + position.x,
+                      y: calloutBounds.y + position.y,
+                    },
+                  });
+                }}
+                onDragEnd={(event) => {
+                  event.cancelBubble = true;
+                  const position = event.target.position();
+                  setDraggingCalloutTextFrame(null);
+                  updateAnnotation(annotation.id, (current) => {
+                    if (current.geometry.kind === 'callout') {
+                      current.geometry = {
+                        ...current.geometry,
+                        text: {
+                          ...current.geometry.text,
+                          x: calloutBounds.x + position.x,
+                          y: calloutBounds.y + position.y,
+                        },
+                      };
+                    }
+                  });
+                }}
+              >
+                <Rect
+                  width={relativeGeometry.text.width}
+                  height={relativeGeometry.text.height}
+                  fill={textBackgroundColor}
+                  stroke={borderColor}
+                  strokeWidth={selected || isPreview ? 2 : 1}
+                  cornerRadius={12}
+                  shadowColor="rgba(15,23,42,0.14)"
+                  shadowBlur={isPreview ? 0 : 10}
+                  shadowOffsetX={0}
+                  shadowOffsetY={isPreview ? 0 : 4}
+                  shadowOpacity={isPreview ? 0 : 0.9}
+                />
+                <Text
+                  x={12}
+                  y={10}
+                  width={Math.max(0, renderedGeometry.text.width - 24)}
+                  height={Math.max(0, renderedGeometry.text.height - 20)}
+                  text={annotation.label ?? ''}
+                  fill={annotation.style.textColor ?? DEFAULT_TEXT_STYLE.textColor}
+                  fontSize={annotation.style.fontSize ?? DEFAULT_TEXT_STYLE.fontSize}
+                  fontStyle={getTextFontStyle(annotation.style)}
+                  textDecoration={annotation.style.textDecoration ?? DEFAULT_TEXT_STYLE.textDecoration}
+                  lineHeight={1.45}
+                />
+              </Group>
+            )}
+          </Group>
+        );
+      }
+
+      case 'image-callout': {
+        if (geometry.kind !== 'image-callout') {
+          return null;
+        }
+
+        const renderedGeometry = {
+          ...geometry,
+          ...(draggingCalloutTargetFrame?.annotationId === annotation.id
+            ? { target: draggingCalloutTargetFrame.target }
+            : {}),
+          ...(draggingImageCalloutPanelFrame?.annotationId === annotation.id
+            ? { panel: draggingImageCalloutPanelFrame.panel }
+            : {}),
+        };
+        const calloutBounds = getImageCalloutBounds(renderedGeometry);
+        const relativeGeometry = getRelativeImageCalloutGeometry(renderedGeometry, calloutBounds);
+        const connectorPoints = getCalloutConnectorPoints(relativeGeometry);
+        const borderColor = selected ? '#2563eb' : '#94a3b8';
+        const groupX = renderedDocumentPosition.x + calloutBounds.x;
+        const groupY = renderedDocumentPosition.y + calloutBounds.y;
+        const embeddedAsset = annotation.imageAssetId ? embeddedAssetsById.get(annotation.imageAssetId) : undefined;
+
+        return (
+          <Group
+            key={annotation.id}
+            x={groupX}
+            y={groupY}
+            draggable={!readOnly && activeTool === 'select' && !isPreview}
+            {...commonProps}
+            onMouseEnter={() => {
+              if (!readOnly && activeTool === 'select') {
+                setHoveredCalloutGroupId(annotation.id);
+              }
+            }}
+            onMouseLeave={() => {
+              if (hoveredCalloutGroupId === annotation.id) {
+                setHoveredCalloutGroupId(null);
+              }
+            }}
+            onDragStart={() => {
+              setIsDraggingCalloutGroup(true);
+              setHoveredCalloutGroupId(annotation.id);
+            }}
+            onDragEnd={(event) => {
+              const pos = event.target.position();
+              const deltaX = pos.x - groupX;
+              const deltaY = pos.y - groupY;
+              setIsDraggingCalloutGroup(false);
+              setHoveredCalloutGroupId(null);
+              setDraggingCalloutTargetFrame(null);
+              setDraggingImageCalloutPanelFrame(null);
+
+              updateAnnotation(annotation.id, (current) => {
+                if (current.geometry.kind === 'image-callout') {
+                  current.geometry = {
+                    ...current.geometry,
+                    target: {
+                      ...current.geometry.target,
+                      x: current.geometry.target.x + deltaX,
+                      y: current.geometry.target.y + deltaY,
+                    },
+                    panel: {
+                      ...current.geometry.panel,
+                      x: current.geometry.panel.x + deltaX,
+                      y: current.geometry.panel.y + deltaY,
+                    },
+                  };
+                }
+              });
+            }}
+          >
+            <Group
+              x={relativeGeometry.target.x}
+              y={relativeGeometry.target.y}
+              draggable={!readOnly && activeTool === 'select' && selected && !isPreview}
+              onDragStart={(event) => {
+                event.cancelBubble = true;
+                setSelectedAnnotation(annotation.id);
+              }}
+              onDragMove={(event) => {
+                const position = event.target.position();
+                setDraggingCalloutTargetFrame({
+                  annotationId: annotation.id,
+                  target: {
+                    ...renderedGeometry.target,
+                    x: calloutBounds.x + position.x,
+                    y: calloutBounds.y + position.y,
+                  },
+                });
+              }}
+              onDragEnd={(event) => {
+                event.cancelBubble = true;
+                const position = event.target.position();
+                setDraggingCalloutTargetFrame(null);
+                updateAnnotation(annotation.id, (current) => {
+                  if (current.geometry.kind === 'image-callout') {
+                    current.geometry = {
+                      ...current.geometry,
+                      target: {
+                        ...current.geometry.target,
+                        x: calloutBounds.x + position.x,
+                        y: calloutBounds.y + position.y,
+                      },
+                    };
+                  }
+                });
+              }}
+            >
+              <Rect
+                width={relativeGeometry.target.width}
+                height={relativeGeometry.target.height}
+                stroke={annotation.style.stroke}
+                strokeWidth={(annotation.style.strokeWidth ?? 3) + (selected ? 1 : 0)}
+                fill={annotation.style.fill ?? 'rgba(255,255,255,0)'}
+                cornerRadius={10}
+              />
+            </Group>
+            <Line
+              points={connectorPoints}
+              stroke={annotation.style.stroke}
+              strokeWidth={(annotation.style.strokeWidth ?? 3) + (selected ? 1 : 0)}
+              lineCap="round"
+              lineJoin="round"
+              hitStrokeWidth={12}
+            />
+            <Group
+              x={relativeGeometry.panel.x}
+              y={relativeGeometry.panel.y}
+              draggable={!readOnly && activeTool === 'select' && selected && !isPreview}
+              onDragStart={(event) => {
+                event.cancelBubble = true;
+                setSelectedAnnotation(annotation.id);
+              }}
+              onDragMove={(event) => {
+                const position = event.target.position();
+                setDraggingImageCalloutPanelFrame({
+                  annotationId: annotation.id,
+                  panel: {
+                    ...renderedGeometry.panel,
+                    x: calloutBounds.x + position.x,
+                    y: calloutBounds.y + position.y,
+                  },
+                });
+              }}
+              onDragEnd={(event) => {
+                event.cancelBubble = true;
+                const position = event.target.position();
+                setDraggingImageCalloutPanelFrame(null);
+                updateAnnotation(annotation.id, (current) => {
+                  if (current.geometry.kind === 'image-callout') {
+                    current.geometry = {
+                      ...current.geometry,
+                      panel: {
+                        ...current.geometry.panel,
+                        x: calloutBounds.x + position.x,
+                        y: calloutBounds.y + position.y,
+                      },
+                    };
+                  }
+                });
+              }}
+            >
+              <Rect
+                width={relativeGeometry.panel.width}
+                height={relativeGeometry.panel.height}
+                fill="#ffffff"
+                stroke={borderColor}
+                strokeWidth={selected || isPreview ? 2 : 1}
+                cornerRadius={12}
+                shadowColor="rgba(15,23,42,0.14)"
+                shadowBlur={isPreview ? 0 : 10}
+                shadowOffsetX={0}
+                shadowOffsetY={isPreview ? 0 : 4}
+                shadowOpacity={isPreview ? 0 : 0.9}
+              />
+              <ImageCalloutPanel src={embeddedAsset?.imageDataUrl} panel={relativeGeometry.panel} />
+            </Group>
+          </Group>
+        );
+      }
+
       default:
         return null;
     }
@@ -1195,8 +2231,10 @@ export function AnnotationCanvas({
           ref={viewportRef}
           className={cn(
             'canvas-scrollbar min-h-[320px] h-full overflow-auto rounded-2xl bg-white',
-            isPanning
+            isPanning || isDraggingCalloutGroup
               ? 'cursor-grabbing'
+              : hoveredCalloutGroupId && activeTool === 'select'
+                ? 'cursor-move'
               : isSpacePressed
                 ? 'cursor-grab'
                 : activeTool === 'select'
@@ -1276,6 +2314,72 @@ export function AnnotationCanvas({
                 </Group>
                 {draft.annotations.map((annotation) => renderAnnotation(annotation))}
                 {preview ? renderAnnotation(preview, true) : null}
+                {pendingInlineCalloutGeometry ? (
+                  <Group x={renderedDocumentPosition.x} y={renderedDocumentPosition.y}>
+                    <Rect
+                      x={pendingInlineCalloutGeometry.target.x}
+                      y={pendingInlineCalloutGeometry.target.y}
+                      width={pendingInlineCalloutGeometry.target.width}
+                      height={pendingInlineCalloutGeometry.target.height}
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      cornerRadius={10}
+                      fill="rgba(255,255,255,0)"
+                    />
+                    <Line
+                      points={getCalloutConnectorPoints(pendingInlineCalloutGeometry)}
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                  </Group>
+                ) : null}
+                {pendingImageCalloutGeometry ? (
+                  <Group x={renderedDocumentPosition.x} y={renderedDocumentPosition.y}>
+                    <Rect
+                      x={pendingImageCalloutGeometry.target.x}
+                      y={pendingImageCalloutGeometry.target.y}
+                      width={pendingImageCalloutGeometry.target.width}
+                      height={pendingImageCalloutGeometry.target.height}
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      cornerRadius={10}
+                      fill="rgba(255,255,255,0)"
+                    />
+                    <Line
+                      points={getCalloutConnectorPoints(pendingImageCalloutGeometry)}
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      lineCap="round"
+                      lineJoin="round"
+                    />
+                    <Rect
+                      x={pendingImageCalloutGeometry.panel.x}
+                      y={pendingImageCalloutGeometry.panel.y}
+                      width={pendingImageCalloutGeometry.panel.width}
+                      height={pendingImageCalloutGeometry.panel.height}
+                      fill="#ffffff"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      cornerRadius={12}
+                      shadowColor="rgba(15,23,42,0.14)"
+                      shadowBlur={10}
+                      shadowOffsetX={0}
+                      shadowOffsetY={4}
+                      shadowOpacity={0.9}
+                    />
+                    <Text
+                      x={pendingImageCalloutGeometry.panel.x + 14}
+                      y={pendingImageCalloutGeometry.panel.y + pendingImageCalloutGeometry.panel.height / 2 - 8}
+                      width={Math.max(0, pendingImageCalloutGeometry.panel.width - 28)}
+                      text="Select image"
+                      fontSize={12}
+                      fill="#64748b"
+                      align="center"
+                    />
+                  </Group>
+                ) : null}
               </Layer>
             </Stage>
           </div>
@@ -1303,8 +2407,31 @@ export function AnnotationCanvas({
             onFrameChange={updateInlineTextFrame}
             onCommit={commitInlineTextEditor}
             onCancel={cancelInlineTextEditor}
+            allowHeightShrink={inlineTextEditor.annotationTool === 'callout'}
+            minimumHeight={inlineTextEditor.annotationTool === 'callout' ? CALLOUT_TEXT_HEIGHT : 24}
           />
         ) : null}
+
+        {selectedImageCallout && selectedImageCalloutToolbarStyle && !readOnly && activeTool === 'select' ? (
+          <FloatingImageCalloutToolbar
+            isOpen
+            style={selectedImageCalloutToolbarStyle}
+            replaceLabel={messages.contextMenu.replaceImage}
+            copyLabel={messages.contextMenu.copy}
+            deleteLabel={messages.contextMenu.delete}
+            onReplace={handleReplaceImageCallout}
+            onCopy={handleCopySelectedImageCallout}
+            onDelete={handleDeleteSelectedImageCallout}
+          />
+        ) : null}
+
+        <input
+          ref={imageCalloutFileRef}
+          className="hidden"
+          type="file"
+          accept="image/*"
+          onChange={handleImageCalloutFileChange}
+        />
 
         <CanvasContextMenu
           isOpen={contextMenu.isOpen && !readOnly}

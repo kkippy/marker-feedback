@@ -4,6 +4,8 @@ import {
   ChevronDown,
   Hash,
   Highlighter,
+  Image,
+  MessageSquare,
   type LucideIcon,
   MousePointer2,
   ScanSearch,
@@ -22,6 +24,8 @@ const tools: AnnotationTool[] = [
   'text',
   'blur',
   'marker',
+  'callout',
+  'image-callout',
 ];
 
 const toolIcons: Record<AnnotationTool, LucideIcon> = {
@@ -32,6 +36,8 @@ const toolIcons: Record<AnnotationTool, LucideIcon> = {
   text: Type,
   blur: ScanSearch,
   marker: Hash,
+  callout: MessageSquare,
+  'image-callout': Image,
 };
 
 export function ToolPalette({

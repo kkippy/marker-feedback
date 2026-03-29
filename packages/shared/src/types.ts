@@ -1,4 +1,13 @@
-export type AnnotationTool = 'select' | 'rectangle' | 'arrow' | 'highlight' | 'text' | 'blur' | 'marker';
+export type AnnotationTool =
+  | 'select'
+  | 'rectangle'
+  | 'arrow'
+  | 'highlight'
+  | 'text'
+  | 'blur'
+  | 'marker'
+  | 'callout'
+  | 'image-callout';
 export type ThreadStatus = 'open' | 'resolved';
 export type AssetSourceType = 'upload' | 'capture' | 'draft';
 
@@ -40,7 +49,33 @@ export interface TextGeometry {
   height: number;
 }
 
-export type AnnotationGeometry = RectGeometry | ArrowGeometry | MarkerGeometry | TextGeometry;
+export interface CalloutGeometry {
+  kind: 'callout';
+  target: RectGeometry;
+  text: TextGeometry;
+}
+
+export interface ImageCalloutGeometry {
+  kind: 'image-callout';
+  target: RectGeometry;
+  panel: RectGeometry;
+}
+
+export type AnnotationGeometry =
+  | RectGeometry
+  | ArrowGeometry
+  | MarkerGeometry
+  | TextGeometry
+  | CalloutGeometry
+  | ImageCalloutGeometry;
+
+export interface EmbeddedImageAsset {
+  id: string;
+  imageDataUrl: string;
+  width: number;
+  height: number;
+  createdAt: string;
+}
 
 export interface AnnotationStyle {
   stroke: string;
@@ -63,6 +98,7 @@ export interface Annotation {
   tool: Exclude<AnnotationTool, 'select'>;
   geometry: AnnotationGeometry;
   label?: string;
+  imageAssetId?: string;
   style: AnnotationStyle;
   createdAt: string;
 }
@@ -89,6 +125,7 @@ export interface CommentThread {
 export interface EditorDraft {
   id: string;
   asset: ImageAsset | null;
+  embeddedAssets: EmbeddedImageAsset[];
   annotations: Annotation[];
   threads: CommentThread[];
   updatedAt: string;

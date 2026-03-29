@@ -4,9 +4,13 @@ import {
   type Annotation,
   type AnnotationStyle,
   type AnnotationTool,
+  type CalloutGeometry,
   type Comment,
+  type EmbeddedImageAsset,
   type EditorDraft,
   type ImageAsset,
+  type ImageCalloutGeometry,
+  type RectGeometry,
   type TextGeometry,
   type ThreadStatus,
 } from '@marker/shared';
@@ -34,10 +38,26 @@ export const DEFAULT_TEXT_STYLE: AnnotationStyle = {
 export const createEmptyDraft = (): EditorDraft => ({
   id: createId('draft'),
   asset: null,
+  embeddedAssets: [],
   annotations: [],
   threads: [],
   updatedAt: now(),
 });
+
+const normalizeDraft = (draft: EditorDraft): EditorDraft => ({
+  ...draft,
+  embeddedAssets: draft.embeddedAssets ?? [],
+});
+
+const cleanupEmbeddedAssets = (draft: EditorDraft) => {
+  const usedAssetIds = new Set(
+    draft.annotations
+      .map((annotation) => annotation.imageAssetId)
+      .filter((assetId): assetId is string => Boolean(assetId)),
+  );
+
+  draft.embeddedAssets = draft.embeddedAssets.filter((asset) => usedAssetIds.has(asset.id));
+};
 
 type DraftMutator = (draft: EditorDraft) => void;
 
@@ -54,6 +74,7 @@ export interface ContextMenuState {
 
 export interface InlineTextEditorState {
   mode: 'create' | 'edit';
+  annotationTool: Extract<AnnotationTool, 'text' | 'callout'>;
   annotationId: string | null;
   x: number;
   y: number;
@@ -61,6 +82,7 @@ export interface InlineTextEditorState {
   height: number;
   value: string;
   style: AnnotationStyle;
+  calloutTarget: RectGeometry | null;
 }
 
 export interface EditorUiState {
@@ -113,6 +135,7 @@ export const startInlineTextCreateState = (
   ...closeContextMenuState(state),
   inlineTextEditor: {
     mode: 'create',
+    annotationTool: 'text',
     annotationId: null,
     x: point.x,
     y: point.y,
@@ -123,6 +146,30 @@ export const startInlineTextCreateState = (
       ...state.textStylePreset,
       textBackgroundColor: DEFAULT_TEXT_STYLE.textBackgroundColor,
     },
+    calloutTarget: null,
+  },
+});
+
+export const startInlineCalloutCreateState = (
+  state: EditorUiState,
+  geometry: CalloutGeometry,
+): EditorUiState => ({
+  ...closeContextMenuState(state),
+  inlineTextEditor: {
+    mode: 'create',
+    annotationTool: 'callout',
+    annotationId: null,
+    x: geometry.text.x,
+    y: geometry.text.y,
+    width: geometry.text.width,
+    height: geometry.text.height,
+    value: '',
+    style: {
+      ...state.textStylePreset,
+      textBackgroundColor: '#ffffff',
+      textBoxMode: 'manual',
+    },
+    calloutTarget: geometry.target,
   },
 });
 
@@ -141,6 +188,7 @@ export const startInlineTextEditState = (
     selectedAnnotationId: annotationId,
     inlineTextEditor: {
       mode: 'edit',
+      annotationTool: 'text',
       annotationId,
       x: annotation.geometry.x,
       y: annotation.geometry.y,
@@ -150,7 +198,40 @@ export const startInlineTextEditState = (
       style: {
         ...DEFAULT_TEXT_STYLE,
         ...annotation.style,
+        textBoxMode: 'manual',
       },
+      calloutTarget: null,
+    },
+  };
+};
+
+export const startInlineCalloutEditState = (
+  state: EditorUiState,
+  annotationId: string,
+): EditorUiState => {
+  const annotation = state.draft.annotations.find((item) => item.id === annotationId);
+
+  if (!annotation || annotation.tool !== 'callout' || annotation.geometry.kind !== 'callout') {
+    return state;
+  }
+
+  return {
+    ...closeContextMenuState(state),
+    selectedAnnotationId: annotationId,
+    inlineTextEditor: {
+      mode: 'edit',
+      annotationTool: 'callout',
+      annotationId,
+      x: annotation.geometry.text.x,
+      y: annotation.geometry.text.y,
+      width: annotation.geometry.text.width,
+      height: annotation.geometry.text.height,
+      value: annotation.label ?? '',
+      style: {
+        ...DEFAULT_TEXT_STYLE,
+        ...annotation.style,
+      },
+      calloutTarget: annotation.geometry.target,
     },
   };
 };
@@ -278,6 +359,36 @@ const createTextAnnotation = (
   };
 };
 
+const createCalloutAnnotation = (
+  draft: EditorDraft,
+  editor: InlineTextEditorState,
+  label: string,
+): Annotation | null => {
+  if (!draft.asset || !editor.calloutTarget) {
+    return null;
+  }
+
+  return {
+    id: createId('annotation'),
+    assetId: draft.asset.id,
+    tool: 'callout',
+    geometry: {
+      kind: 'callout',
+      target: editor.calloutTarget,
+      text: {
+        kind: 'text',
+        x: editor.x,
+        y: editor.y,
+        width: editor.width,
+        height: editor.height,
+      },
+    },
+    label,
+    style: editor.style,
+    createdAt: now(),
+  };
+};
+
 export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState => {
   if (!state.inlineTextEditor) {
     return state;
@@ -293,7 +404,7 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
     const nextDraft = cloneDraft(state.draft);
     const annotation = nextDraft.annotations.find((item) => item.id === state.inlineTextEditor?.annotationId);
 
-    if (!annotation || annotation.tool !== 'text') {
+    if (!annotation || (annotation.tool !== 'text' && annotation.tool !== 'callout')) {
       return cancelInlineTextEditorState(state);
     }
 
@@ -310,6 +421,19 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
       };
     }
 
+    if (annotation.geometry.kind === 'callout') {
+      annotation.geometry = {
+        ...annotation.geometry,
+        text: {
+          ...annotation.geometry.text,
+          x: state.inlineTextEditor.x,
+          y: state.inlineTextEditor.y,
+          width: state.inlineTextEditor.width,
+          height: state.inlineTextEditor.height,
+        },
+      };
+    }
+
     nextDraft.updatedAt = now();
 
     return {
@@ -322,7 +446,10 @@ export const commitInlineTextEditorState = (state: EditorUiState): EditorUiState
   }
 
   const nextDraft = cloneDraft(state.draft);
-  const annotation = createTextAnnotation(nextDraft, state.inlineTextEditor, value);
+  const annotation =
+    state.inlineTextEditor.annotationTool === 'callout'
+      ? createCalloutAnnotation(nextDraft, state.inlineTextEditor, value)
+      : createTextAnnotation(nextDraft, state.inlineTextEditor, value);
 
   if (!annotation) {
     return cancelInlineTextEditorState(state);
@@ -358,7 +485,9 @@ interface EditorState {
   openContextMenu: (target: ContextMenuTarget, screenPosition: { x: number; y: number }) => void;
   closeContextMenu: () => void;
   startInlineTextCreate: (point: { x: number; y: number }) => void;
+  startInlineCalloutCreate: (geometry: CalloutGeometry) => void;
   startInlineTextEdit: (annotationId: string) => void;
+  startInlineCalloutEdit: (annotationId: string) => void;
   updateInlineTextValue: (value: string) => void;
   updateInlineTextSize: (size: { width: number; height: number }) => void;
   updateInlineTextFrame: (
@@ -377,6 +506,7 @@ interface EditorState {
   zoomOut: () => void;
   commitDraft: (mutator: DraftMutator) => void;
   addAnnotation: (annotation: Annotation) => void;
+  addImageCalloutAnnotation: (annotation: Annotation, embeddedAsset: EmbeddedImageAsset) => void;
   updateAnnotation: (annotationId: string, mutator: (annotation: Annotation) => void) => void;
   createThreadComment: (body: string, annotationId: string | null) => void;
   replyToThread: (threadId: string, body: string, parentId?: string | null) => void;
@@ -403,7 +533,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   textStylePreset: DEFAULT_TEXT_STYLE,
   setDraft: (draft) =>
     set({
-      draft,
+      draft: normalizeDraft(draft),
       history: [],
       future: [],
       selectedAnnotationId: null,
@@ -436,8 +566,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   closeContextMenu: () => set((state) => closeContextMenuState(state)),
   startInlineTextCreate: (point) =>
     set((state) => startInlineTextCreateState(state, point)),
+  startInlineCalloutCreate: (geometry) =>
+    set((state) => startInlineCalloutCreateState(state, geometry)),
   startInlineTextEdit: (annotationId) =>
     set((state) => startInlineTextEditState(state, annotationId)),
+  startInlineCalloutEdit: (annotationId) =>
+    set((state) => startInlineCalloutEditState(state, annotationId)),
   updateInlineTextValue: (value) =>
     set((state) => updateInlineTextValueState(state, value)),
   updateInlineTextSize: (size) =>
@@ -454,14 +588,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       const selectedAnnotation = state.draft.annotations.find((item) => item.id === state.selectedAnnotationId);
 
-      if (!selectedAnnotation || selectedAnnotation.tool !== 'text') {
+      if (!selectedAnnotation || (selectedAnnotation.tool !== 'text' && selectedAnnotation.tool !== 'callout')) {
         return updateTextStylePresetState(state, patch);
       }
 
       const nextDraft = cloneDraft(state.draft);
       const annotation = nextDraft.annotations.find((item) => item.id === state.selectedAnnotationId);
 
-      if (!annotation || annotation.tool !== 'text') {
+      if (!annotation || (annotation.tool !== 'text' && annotation.tool !== 'callout')) {
         return updateTextStylePresetState(state, patch);
       }
 
@@ -521,6 +655,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => {
       const nextDraft = cloneDraft(state.draft);
       mutator(nextDraft);
+      cleanupEmbeddedAssets(nextDraft);
       nextDraft.updatedAt = now();
 
       return {
@@ -531,6 +666,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
   addAnnotation: (annotation) => {
     get().commitDraft((draft) => {
+      draft.annotations.push(annotation);
+    });
+    set({ selectedAnnotationId: annotation.id });
+  },
+  addImageCalloutAnnotation: (annotation, embeddedAsset) => {
+    get().commitDraft((draft) => {
+      draft.embeddedAssets.push(embeddedAsset);
       draft.annotations.push(annotation);
     });
     set({ selectedAnnotationId: annotation.id });

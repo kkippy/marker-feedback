@@ -46,7 +46,6 @@ export interface WebMessages {
     recentDraftsDescription: string;
     noDrafts: string;
     draftSummary: (annotationCount: number, hasAsset: boolean) => string;
-
     replaceImage: string;
     undo: string;
     redo: string;
@@ -78,7 +77,10 @@ export interface WebMessages {
     arrow: string;
     highlight: string;
     marker: string;
+    callout: string;
+    imageCallout: string;
     editText: string;
+    replaceImage: string;
     copy: string;
     delete: string;
     bringToFront: string;
@@ -109,7 +111,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       selectAriaLabel: 'Choose interface language',
       options: {
         system: 'Follow system',
-        'zh-CN': '简体中文',
+        'zh-CN': 'Simplified Chinese',
         en: 'English',
       },
     },
@@ -137,7 +139,6 @@ const messages: Record<SupportedLocale, WebMessages> = {
       noDrafts: 'No drafts yet.',
       draftSummary: (annotationCount, hasAsset) =>
         `${annotationCount} annotations · ${hasAsset ? 'image ready' : 'missing asset'}`,
-
       replaceImage: 'Replace image',
       undo: 'Undo',
       redo: 'Redo',
@@ -169,6 +170,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
         text: 'Text',
         blur: 'Blur',
         marker: 'Marker',
+        callout: 'Callout',
+        'image-callout': 'Image Callout',
       },
     },
     contextMenu: {
@@ -177,7 +180,10 @@ const messages: Record<SupportedLocale, WebMessages> = {
       arrow: 'Arrow',
       highlight: 'Highlight',
       marker: 'Marker',
+      callout: 'Callout',
+      imageCallout: 'Image callout',
       editText: 'Edit text',
+      replaceImage: 'Replace image',
       copy: 'Copy',
       delete: 'Delete',
       bringToFront: 'Bring to front',
@@ -187,7 +193,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       textPromptDefault: 'Add note',
     },
     share: {
-      loading: 'Loading shared feedback…',
+      loading: 'Loading shared feedback...',
       missingTitle: 'Share link not found',
       missingDescription:
         'This token does not exist in local storage. Create a share link from the editor first.',
@@ -212,10 +218,10 @@ const messages: Record<SupportedLocale, WebMessages> = {
       },
     },
     topBar: {
-      annotations: (count) => `${count} 条标注`,
+      annotations: (count) => `${count} 个标注`,
       threads: (count) => `${count} 条讨论`,
       zoom: (percent) => `缩放 ${percent}%`,
-      currentMode: (label) => `当前：${label}`,
+      currentMode: (label) => `当前模式：${label}`,
       zoomOutAriaLabel: '缩小',
       zoomInAriaLabel: '放大',
       reset: '重置',
@@ -226,15 +232,15 @@ const messages: Record<SupportedLocale, WebMessages> = {
     editor: {
       intakeEyebrow: '素材导入',
       intakeTitle: '开始一轮反馈',
-      intakeDescription: '上传本地图片、打开最近草稿，或由扩展携带当前标签页截图直接进入。',
+      intakeDescription:
+        '上传本地图像、打开最近草稿，或让扩展携带当前标签页截图直接进入编辑器。',
       uploadImage: '上传图片',
       openLatestDraft: '打开最新草稿',
       recentDraftsTitle: '最近草稿',
       recentDraftsDescription: '无需重新上传图片，继续之前的编辑。',
       noDrafts: '还没有草稿。',
       draftSummary: (annotationCount, hasAsset) =>
-        `${annotationCount} 条标注 · ${hasAsset ? '图片已就绪' : '缺少图片资源'}`,
-
+        `${annotationCount} 个标注 · ${hasAsset ? '图片已就绪' : '缺少图片资源'}`,
       replaceImage: '替换图片',
       undo: '撤销',
       redo: '重做',
@@ -243,8 +249,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
       title: '讨论',
       description: '可以创建通用评论，或把反馈关联到当前选中的标注。',
       selectedAnnotation: (annotationId) => `当前选中标注：${annotationId}`,
-      noAnnotationSelected: '暂未选中标注',
-      composerPlaceholder: '描述问题、建议，或确认说明…',
+      noAnnotationSelected: '当前未选中标注',
+      composerPlaceholder: '描述问题、建议，或确认说明...',
       addComment: '添加评论',
       noComments: '还没有评论。',
       linkedTo: (annotationId) => `关联到 ${annotationId}`,
@@ -253,7 +259,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       generalFeedbackTitle: '通用反馈',
       statusOpen: '待处理',
       statusResolved: '已解决',
-      replyPlaceholder: '回复这条讨论…',
+      replyPlaceholder: '回复这条讨论...',
       reply: '回复',
     },
     tools: {
@@ -266,6 +272,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
         text: '文本',
         blur: '模糊',
         marker: '编号',
+        callout: '引出',
+        'image-callout': '图引出',
       },
     },
     contextMenu: {
@@ -274,7 +282,10 @@ const messages: Record<SupportedLocale, WebMessages> = {
       arrow: '箭头',
       highlight: '高亮',
       marker: '编号',
+      callout: '引出区域',
+      imageCallout: '图引出',
       editText: '编辑文本',
+      replaceImage: '替换图片',
       copy: '复制',
       delete: '删除',
       bringToFront: '置于顶层',
@@ -284,7 +295,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       textPromptDefault: '输入备注内容',
     },
     share: {
-      loading: '正在加载共享反馈…',
+      loading: '正在加载分享反馈...',
       missingTitle: '未找到分享链接',
       missingDescription: '这个 token 不存在于本地存储中，请先在编辑器里创建分享链接。',
       openEditor: '打开编辑器',

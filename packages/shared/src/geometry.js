@@ -13,6 +13,34 @@ export const moveGeometry = (geometry, dx, dy) => {
             return { ...geometry, x: geometry.x + dx, y: geometry.y + dy };
         case 'marker':
             return { ...geometry, x: geometry.x + dx, y: geometry.y + dy };
+        case 'callout':
+            return {
+                ...geometry,
+                target: {
+                    ...geometry.target,
+                    x: geometry.target.x + dx,
+                    y: geometry.target.y + dy
+                },
+                text: {
+                    ...geometry.text,
+                    x: geometry.text.x + dx,
+                    y: geometry.text.y + dy
+                }
+            };
+        case 'image-callout':
+            return {
+                ...geometry,
+                target: {
+                    ...geometry.target,
+                    x: geometry.target.x + dx,
+                    y: geometry.target.y + dy
+                },
+                panel: {
+                    ...geometry.panel,
+                    x: geometry.panel.x + dx,
+                    y: geometry.panel.y + dy
+                }
+            };
         case 'arrow':
             return {
                 ...geometry,
@@ -31,6 +59,30 @@ export const getAnnotationBounds = (annotation) => {
         case 'rect':
         case 'text':
             return { x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height };
+        case 'callout': {
+            const left = Math.min(geometry.target.x, geometry.text.x);
+            const top = Math.min(geometry.target.y, geometry.text.y);
+            const right = Math.max(geometry.target.x + geometry.target.width, geometry.text.x + geometry.text.width);
+            const bottom = Math.max(geometry.target.y + geometry.target.height, geometry.text.y + geometry.text.height);
+            return {
+                x: left,
+                y: top,
+                width: right - left,
+                height: bottom - top
+            };
+        }
+        case 'image-callout': {
+            const left = Math.min(geometry.target.x, geometry.panel.x);
+            const top = Math.min(geometry.target.y, geometry.panel.y);
+            const right = Math.max(geometry.target.x + geometry.target.width, geometry.panel.x + geometry.panel.width);
+            const bottom = Math.max(geometry.target.y + geometry.target.height, geometry.panel.y + geometry.panel.height);
+            return {
+                x: left,
+                y: top,
+                width: right - left,
+                height: bottom - top
+            };
+        }
         case 'marker':
             return { x: geometry.x - 14, y: geometry.y - 14, width: 28, height: 28 };
         case 'arrow': {

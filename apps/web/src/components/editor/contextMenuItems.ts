@@ -4,7 +4,10 @@ import {
   Copy,
   Highlighter,
   Hash,
+  Image,
+  MessageSquare,
   MousePointer2,
+  RefreshCw,
   ScanText,
   Square,
   Trash2,
@@ -18,7 +21,10 @@ export type ContextMenuActionId =
   | 'arrow'
   | 'highlight'
   | 'marker'
+  | 'callout'
+  | 'image-callout'
   | 'edit-text'
+  | 'replace-image'
   | 'copy'
   | 'delete'
   | 'bring-to-front';
@@ -28,7 +34,7 @@ export interface ContextMenuItem {
   label: string;
   icon: LucideIcon;
   danger?: boolean;
-  tool?: Extract<AnnotationTool, 'rectangle' | 'arrow' | 'highlight' | 'marker' | 'text'>;
+  tool?: Extract<AnnotationTool, 'rectangle' | 'arrow' | 'highlight' | 'marker' | 'text' | 'callout' | 'image-callout'>;
 }
 
 export type ContextMenuTarget =
@@ -41,7 +47,10 @@ export interface ContextMenuLabels {
   arrow: string;
   highlight: string;
   marker: string;
+  callout: string;
+  imageCallout: string;
   editText: string;
+  replaceImage: string;
   copy: string;
   delete: string;
   bringToFront: string;
@@ -53,7 +62,10 @@ const defaultLabels: ContextMenuLabels = {
   arrow: 'Arrow',
   highlight: 'Highlight',
   marker: 'Marker',
+  callout: 'Callout',
+  imageCallout: 'Image callout',
   editText: 'Edit text',
+  replaceImage: 'Replace image',
   copy: 'Copy',
   delete: 'Delete',
   bringToFront: 'Bring to front',
@@ -65,6 +77,8 @@ const getCreationItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
   { id: 'arrow', label: labels.arrow, icon: ArrowRight, tool: 'arrow' },
   { id: 'highlight', label: labels.highlight, icon: Highlighter, tool: 'highlight' },
   { id: 'marker', label: labels.marker, icon: Hash, tool: 'marker' },
+  { id: 'callout', label: labels.callout, icon: MessageSquare, tool: 'callout' },
+  { id: 'image-callout', label: labels.imageCallout, icon: Image, tool: 'image-callout' },
 ];
 
 const getObjectItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
@@ -78,8 +92,12 @@ export const getContextMenuItems = (target: ContextMenuTarget, labels: ContextMe
     return getCreationItems(labels);
   }
 
-  if (target.annotation.tool === 'text') {
+  if (target.annotation.tool === 'text' || target.annotation.tool === 'callout') {
     return [{ id: 'edit-text', label: labels.editText, icon: ScanText }, ...getObjectItems(labels)];
+  }
+
+  if (target.annotation.tool === 'image-callout') {
+    return [{ id: 'replace-image', label: labels.replaceImage, icon: RefreshCw }, ...getObjectItems(labels)];
   }
 
   return getObjectItems(labels);

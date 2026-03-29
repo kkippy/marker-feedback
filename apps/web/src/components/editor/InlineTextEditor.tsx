@@ -23,6 +23,7 @@ const RESIZE_HANDLE_OFFSET = -5;
 const RESIZE_HANDLE_SIZE = 10;
 const FRAME_DRAG_THICKNESS = 8;
 const FRAME_SEGMENT_INSET = 18;
+const DEFAULT_MIN_TEXT_HEIGHT = 24;
 
 type InteractionState =
   | {
@@ -63,6 +64,8 @@ export function InlineTextEditor({
   onFrameChange,
   onCommit,
   onCancel,
+  allowHeightShrink = false,
+  minimumHeight = DEFAULT_MIN_TEXT_HEIGHT,
 }: {
   isOpen: boolean;
   value: string;
@@ -81,6 +84,8 @@ export function InlineTextEditor({
   ) => void;
   onCommit: () => void;
   onCancel: () => void;
+  allowHeightShrink?: boolean;
+  minimumHeight?: number;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -168,7 +173,10 @@ export function InlineTextEditor({
     textarea.style.width = `${nextWidthPx}px`;
     textarea.style.height = '0px';
 
-    const minimumHeightPx = Math.max(displayFrame.height * canvasScale, minTextHeight * canvasScale);
+    const minimumHeightPx = Math.max(
+      (allowHeightShrink ? minimumHeight : displayFrame.height) * canvasScale,
+      minTextHeight * canvasScale,
+    );
     const nextHeightPx = Math.max(Math.ceil(textarea.scrollHeight), minimumHeightPx);
     textarea.style.height = `${nextHeightPx}px`;
 
@@ -176,7 +184,18 @@ export function InlineTextEditor({
       width: Number((nextWidthPx / canvasScale).toFixed(2)),
       height: Number((nextHeightPx / canvasScale).toFixed(2)),
     });
-  }, [canvasScale, displayFrame.height, displayFrame.width, minTextHeight, onSizeChange, resizePreview, textBoxMode, value]);
+  }, [
+    allowHeightShrink,
+    canvasScale,
+    displayFrame.height,
+    displayFrame.width,
+    minTextHeight,
+    minimumHeight,
+    onSizeChange,
+    resizePreview,
+    textBoxMode,
+    value,
+  ]);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
