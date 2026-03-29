@@ -3,6 +3,7 @@ import type { AnnotationTool } from '@marker/shared';
 import {
   ArrowRight,
   ChevronDown,
+  ChevronRight,
   Hash,
   Highlighter,
   Image,
@@ -19,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useLocale } from '@/lib/locale';
 import { cn } from '@/lib/utils';
 
-const tools: AnnotationTool[] = [
+const primaryTools: AnnotationTool[] = [
   'select',
   'rectangle',
   'line',
@@ -28,9 +29,9 @@ const tools: AnnotationTool[] = [
   'text',
   'blur',
   'marker',
-  'callout',
-  'image-callout',
 ];
+
+const calloutTools: AnnotationTool[] = ['callout', 'image-callout'];
 
 const toolIcons: Record<AnnotationTool, LucideIcon> = {
   select: MousePointer2,
@@ -55,10 +56,14 @@ export function ToolPalette({
   const { messages } = useLocale();
   const ActiveIcon = toolIcons[activeTool];
   const [isOpen, setIsOpen] = useState(false);
+  const [isCalloutSubmenuOpen, setIsCalloutSubmenuOpen] = useState(false);
   const rootRef = useRef<HTMLDetailsElement>(null);
+  const isCalloutToolActive = calloutTools.includes(activeTool);
+  const calloutGroupLabel = messages.tools.calloutGroup ?? messages.tools.labels.callout;
 
   useEffect(() => {
     if (!isOpen) {
+      setIsCalloutSubmenuOpen(false);
       return undefined;
     }
 
@@ -88,8 +93,8 @@ export function ToolPalette({
       </summary>
 
       <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-soft">
-        <div className="grid grid-cols-2 gap-2">
-          {tools.map((tool) => {
+        <div className="flex flex-col gap-2">
+          {primaryTools.map((tool) => {
             const Icon = toolIcons[tool];
 
             return (
@@ -102,8 +107,8 @@ export function ToolPalette({
                 }}
                 className={
                   tool === activeTool
-                    ? 'justify-start bg-blue-600 hover:bg-blue-500'
-                    : 'justify-start bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'justify-start gap-3 bg-blue-600 hover:bg-blue-500'
+                    : 'justify-start gap-3 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }
               >
                 <Icon className="size-4" />
@@ -111,6 +116,73 @@ export function ToolPalette({
               </Button>
             );
           })}
+
+          <div
+            className="relative"
+            onMouseEnter={() => setIsCalloutSubmenuOpen(true)}
+            onMouseLeave={() => setIsCalloutSubmenuOpen(false)}
+            onFocusCapture={() => setIsCalloutSubmenuOpen(true)}
+            onBlurCapture={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setIsCalloutSubmenuOpen(false);
+              }
+            }}
+          >
+            <Button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={isCalloutSubmenuOpen}
+              className={
+                isCalloutToolActive
+                  ? 'w-full justify-start gap-3 bg-blue-600 hover:bg-blue-500'
+                  : 'w-full justify-start gap-3 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }
+            >
+              <MessageSquare className="size-4" />
+              <span className="flex-1 text-left">{calloutGroupLabel}</span>
+              <ChevronRight className="size-4" />
+            </Button>
+
+            <div
+              className={cn(
+                'absolute left-full top-0 z-30 pl-2',
+                isCalloutSubmenuOpen ? 'pointer-events-auto' : 'pointer-events-none',
+              )}
+            >
+              <div
+                className={cn(
+                  'w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-soft',
+                  isCalloutSubmenuOpen ? 'block' : 'hidden',
+                )}
+              >
+                <div className="flex flex-col gap-2">
+                  {calloutTools.map((tool) => {
+                    const Icon = toolIcons[tool];
+
+                    return (
+                      <Button
+                        key={tool}
+                        type="button"
+                        onClick={() => {
+                          onToolChange(tool);
+                          setIsCalloutSubmenuOpen(false);
+                          setIsOpen(false);
+                        }}
+                        className={
+                          tool === activeTool
+                            ? 'w-full justify-start gap-3 bg-blue-600 hover:bg-blue-500'
+                            : 'w-full justify-start gap-3 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }
+                      >
+                        <Icon className="size-4" />
+                        {messages.tools.labels[tool]}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </details>

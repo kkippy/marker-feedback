@@ -23,6 +23,7 @@ export type ContextMenuActionId =
   | 'arrow'
   | 'highlight'
   | 'marker'
+  | 'callout-group'
   | 'callout'
   | 'image-callout'
   | 'edit-text'
@@ -36,6 +37,7 @@ export interface ContextMenuItem {
   label: string;
   icon: LucideIcon;
   danger?: boolean;
+  children?: ContextMenuItem[];
   tool?: Extract<
     AnnotationTool,
     'rectangle' | 'line' | 'arrow' | 'highlight' | 'marker' | 'text' | 'callout' | 'image-callout'
@@ -53,6 +55,7 @@ export interface ContextMenuLabels {
   arrow: string;
   highlight: string;
   marker: string;
+  calloutGroup?: string;
   callout: string;
   imageCallout: string;
   editText: string;
@@ -69,7 +72,8 @@ const defaultLabels: ContextMenuLabels = {
   arrow: 'Arrow',
   highlight: 'Highlight',
   marker: 'Marker',
-  callout: 'Callout',
+  calloutGroup: 'Callout',
+  callout: 'Text callout',
   imageCallout: 'Image callout',
   editText: 'Edit text',
   replaceImage: 'Replace image',
@@ -85,8 +89,15 @@ const getCreationItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
   { id: 'arrow', label: labels.arrow, icon: ArrowRight, tool: 'arrow' },
   { id: 'highlight', label: labels.highlight, icon: Highlighter, tool: 'highlight' },
   { id: 'marker', label: labels.marker, icon: Hash, tool: 'marker' },
-  { id: 'callout', label: labels.callout, icon: MessageSquare, tool: 'callout' },
-  { id: 'image-callout', label: labels.imageCallout, icon: Image, tool: 'image-callout' },
+  {
+    id: 'callout-group',
+    label: labels.calloutGroup ?? 'Callout',
+    icon: MessageSquare,
+    children: [
+      { id: 'callout', label: labels.callout, icon: MessageSquare, tool: 'callout' },
+      { id: 'image-callout', label: labels.imageCallout, icon: Image, tool: 'image-callout' },
+    ],
+  },
 ];
 
 const getObjectItems = (labels: ContextMenuLabels): ContextMenuItem[] => [

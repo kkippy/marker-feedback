@@ -53,6 +53,17 @@ interface LineEditPreview {
   points: [number, number, number, number];
 }
 
+interface LineDragPreview {
+  annotationId: string;
+  dx: number;
+  dy: number;
+}
+
+interface RectangleEditPreview {
+  annotationId: string;
+  geometry: RectGeometry;
+}
+
 type LineMarkerStyle = NonNullable<Annotation['style']['lineStartMarker']>;
 const CALLOUT_TEXT_WIDTH = 180;
 const CALLOUT_TEXT_HEIGHT = 44;
@@ -101,15 +112,23 @@ const getDefaultStyle = (tool: Annotation['tool']) =>
     ? { stroke: '#f59e0b', fill: 'rgba(251,191,36,0.25)', strokeWidth: 3 }
     : tool === 'blur'
       ? { stroke: '#0f172a', fill: 'rgba(15,23,42,0.45)', strokeWidth: 2 }
-      : tool === 'line'
-        ? {
-            stroke: '#0f172a',
-            strokeWidth: 4,
-            lineDash: 'solid' as const,
-            lineDashSize: 0,
-            lineStartMarker: 'none' as const,
-            lineEndMarker: 'none' as const,
-          }
+        : tool === 'line'
+          ? {
+              stroke: '#0f172a',
+              strokeWidth: 4,
+              lineDash: 'solid' as const,
+              lineDashSize: 0,
+              lineStartMarker: 'none' as const,
+              lineEndMarker: 'none' as const,
+            }
+        : tool === 'rectangle'
+          ? {
+              stroke: '#ef4444',
+              fill: 'rgba(255,255,255,0)',
+              strokeWidth: 3,
+              lineDash: 'solid' as const,
+              lineDashSize: 0,
+            }
         : tool === 'arrow'
           ? { stroke: '#2563eb', strokeWidth: 4 }
           : tool === 'callout'
@@ -160,6 +179,20 @@ const translateLinePoints = (
   Number((points[2] + dx).toFixed(2)),
   Number((points[3] + dy).toFixed(2)),
 ];
+
+const getLineBounds = (points: [number, number, number, number], padding = 12) => {
+  const minX = Math.min(points[0], points[2]) - padding;
+  const minY = Math.min(points[1], points[3]) - padding;
+  const maxX = Math.max(points[0], points[2]) + padding;
+  const maxY = Math.max(points[1], points[3]) + padding;
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+};
 
 const replaceLineHandle = (
   points: [number, number, number, number],
@@ -605,8 +638,14 @@ export function AnnotationCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [hoveredTextAnnotationId, setHoveredTextAnnotationId] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editingRectangleId, setEditingRectangleId] = useState<string | null>(null);
+  const [editingCalloutTargetId, setEditingCalloutTargetId] = useState<string | null>(null);
+  const [editingImageCalloutPanelId, setEditingImageCalloutPanelId] = useState<string | null>(null);
   const [lineEditPreview, setLineEditPreview] = useState<LineEditPreview | null>(null);
+  const [lineDragPreview, setLineDragPreview] = useState<LineDragPreview | null>(null);
+  const [rectangleEditPreview, setRectangleEditPreview] = useState<RectangleEditPreview | null>(null);
   const [lineToolbarReference, setLineToolbarReference] = useState<HTMLDivElement | null>(null);
+  const [calloutColorToolbarReference, setCalloutColorToolbarReference] = useState<HTMLDivElement | null>(null);
   const [hoveredCalloutGroupId, setHoveredCalloutGroupId] = useState<string | null>(null);
   const [isDraggingCalloutGroup, setIsDraggingCalloutGroup] = useState(false);
   const [draggingCalloutTargetFrame, setDraggingCalloutTargetFrame] = useState<{
@@ -752,27 +791,91 @@ export function AnnotationCanvas({
       ? lineEditPreview.points
       : geometry.points;
   }, [editingLineAnnotation, lineEditPreview]);
+  const editingLineOffset = useMemo(
+    () =>
+      lineDragPreview?.annotationId === editingLineId
+        ? { x: lineDragPreview.dx, y: lineDragPreview.dy }
+        : { x: 0, y: 0 },
+    [editingLineId, lineDragPreview],
+  );
+  const editingRectangleAnnotation = useMemo(() => {
+    if (!editingRectangleId) {
+      return null;
+    }
 
-  const lineToolbarPosition = useMemo(() => {
+    const annotation = draft.annotations.find((item) => item.id === editingRectangleId);
+    return annotation?.tool === 'rectangle' && annotation.geometry.kind === 'rect' ? annotation : null;
+  }, [draft.annotations, editingRectangleId]);
+  const editingRectangleGeometry = useMemo<RectGeometry | null>(() => {
+    if (!editingRectangleAnnotation) {
+      return null;
+    }
+
+    const geometry = editingRectangleAnnotation.geometry;
+
+    if (geometry.kind !== 'rect') {
+      return null;
+    }
+
+    return rectangleEditPreview?.annotationId === editingRectangleAnnotation.id
+      ? rectangleEditPreview.geometry
+      : geometry;
+  }, [editingRectangleAnnotation, rectangleEditPreview]);
+
+  const lineToolbarRect = useMemo(() => {
     if (!editingLinePoints || readOnly) {
       return null;
     }
 
-    const midpoint = getLineMidpoint(editingLinePoints);
+    const bounds = getLineBounds(editingLinePoints);
 
     return {
       left:
         layerOffsetX -
         scrollPosition.left +
-        (renderedDocumentPosition.x + midpoint.x) * canvasScale,
+        (renderedDocumentPosition.x + editingLineOffset.x + bounds.x) * canvasScale,
       top:
         layerOffsetY -
         scrollPosition.top +
-        (renderedDocumentPosition.y + midpoint.y) * canvasScale,
+        (renderedDocumentPosition.y + editingLineOffset.y + bounds.y) * canvasScale,
+      width: bounds.width * canvasScale,
+      height: bounds.height * canvasScale,
     };
   }, [
     canvasScale,
+    editingLineOffset.x,
+    editingLineOffset.y,
     editingLinePoints,
+    layerOffsetX,
+    layerOffsetY,
+    readOnly,
+    renderedDocumentPosition.x,
+    renderedDocumentPosition.y,
+    scrollPosition.left,
+    scrollPosition.top,
+  ]);
+  const rectangleToolbarRect = useMemo(() => {
+    if (!editingRectangleGeometry || readOnly) {
+      return null;
+    }
+
+    const { x, y, width, height } = editingRectangleGeometry;
+
+    return {
+      left:
+        layerOffsetX -
+        scrollPosition.left +
+        (renderedDocumentPosition.x + x) * canvasScale,
+      top:
+        layerOffsetY -
+        scrollPosition.top +
+        (renderedDocumentPosition.y + y) * canvasScale,
+      width: width * canvasScale,
+      height: height * canvasScale,
+    };
+  }, [
+    canvasScale,
+    editingRectangleGeometry,
     layerOffsetX,
     layerOffsetY,
     readOnly,
@@ -785,6 +888,71 @@ export function AnnotationCanvas({
     () => new Map(draft.embeddedAssets.map((asset) => [asset.id, asset])),
     [draft.embeddedAssets],
   );
+  const selectedTextCallout = useMemo<{
+    annotation: Annotation;
+    geometry: CalloutGeometry;
+  } | null>(() => {
+    if (!selectedAnnotationId) {
+      return null;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === selectedAnnotationId);
+
+    if (!annotation || annotation.tool !== 'callout' || annotation.geometry.kind !== 'callout') {
+      return null;
+    }
+
+    const geometry = {
+      ...annotation.geometry,
+      ...(draggingCalloutTargetFrame?.annotationId === annotation.id
+        ? { target: draggingCalloutTargetFrame.target }
+        : {}),
+      ...(draggingCalloutTextFrame?.annotationId === annotation.id
+        ? { text: draggingCalloutTextFrame.text }
+        : {}),
+    };
+
+    return {
+      annotation,
+      geometry,
+    };
+  }, [draft.annotations, draggingCalloutTargetFrame, draggingCalloutTextFrame, selectedAnnotationId]);
+  const editingCalloutTargetAnnotation = useMemo<{
+    annotation: Annotation;
+    target: RectGeometry;
+  } | null>(() => {
+    if (!editingCalloutTargetId) {
+      return null;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === editingCalloutTargetId);
+
+    if (!annotation) {
+      return null;
+    }
+
+    if (annotation.tool === 'callout' && annotation.geometry.kind === 'callout') {
+      return {
+        annotation,
+        target:
+          draggingCalloutTargetFrame?.annotationId === annotation.id
+            ? draggingCalloutTargetFrame.target
+            : annotation.geometry.target,
+      };
+    }
+
+    if (annotation.tool === 'image-callout' && annotation.geometry.kind === 'image-callout') {
+      return {
+        annotation,
+        target:
+          draggingCalloutTargetFrame?.annotationId === annotation.id
+            ? draggingCalloutTargetFrame.target
+            : annotation.geometry.target,
+      };
+    }
+
+    return null;
+  }, [draft.annotations, draggingCalloutTargetFrame, editingCalloutTargetId]);
   const selectedImageCallout = useMemo<{
     annotation: Annotation;
     geometry: ImageCalloutGeometry;
@@ -801,15 +969,77 @@ export function AnnotationCanvas({
 
     return {
       annotation,
-      geometry: annotation.geometry,
+      geometry: {
+        ...annotation.geometry,
+        ...(draggingCalloutTargetFrame?.annotationId === annotation.id
+          ? { target: draggingCalloutTargetFrame.target }
+          : {}),
+        ...(draggingImageCalloutPanelFrame?.annotationId === annotation.id
+          ? { panel: draggingImageCalloutPanelFrame.panel }
+          : {}),
+      },
     };
-  }, [draft.annotations, selectedAnnotationId]);
-  const selectedImageCalloutToolbarStyle = useMemo(() => {
-    if (!selectedImageCallout) {
+  }, [draft.annotations, draggingCalloutTargetFrame, draggingImageCalloutPanelFrame, selectedAnnotationId]);
+  const editingImageCalloutPanel = useMemo<{
+    annotation: Annotation;
+    geometry: ImageCalloutGeometry;
+  } | null>(() => {
+    if (!editingImageCalloutPanelId) {
       return null;
     }
 
-    const { panel } = selectedImageCallout.geometry;
+    const annotation = draft.annotations.find((item) => item.id === editingImageCalloutPanelId);
+
+    if (!annotation || annotation.tool !== 'image-callout' || annotation.geometry.kind !== 'image-callout') {
+      return null;
+    }
+
+    return {
+      annotation,
+      geometry: {
+        ...annotation.geometry,
+        ...(draggingCalloutTargetFrame?.annotationId === annotation.id
+          ? { target: draggingCalloutTargetFrame.target }
+          : {}),
+        ...(draggingImageCalloutPanelFrame?.annotationId === annotation.id
+          ? { panel: draggingImageCalloutPanelFrame.panel }
+          : {}),
+      },
+    };
+  }, [draft.annotations, draggingCalloutTargetFrame, draggingImageCalloutPanelFrame, editingImageCalloutPanelId]);
+  const selectedCalloutColorToolbarRect = useMemo(() => {
+    if (!editingCalloutTargetAnnotation) {
+      return null;
+    }
+
+    return {
+      left:
+        (renderedDocumentPosition.x + editingCalloutTargetAnnotation.target.x) * canvasScale +
+        layerOffsetX -
+        scrollPosition.left,
+      top:
+        (renderedDocumentPosition.y + editingCalloutTargetAnnotation.target.y) * canvasScale +
+        layerOffsetY -
+        scrollPosition.top,
+      width: editingCalloutTargetAnnotation.target.width * canvasScale,
+      height: editingCalloutTargetAnnotation.target.height * canvasScale,
+    };
+  }, [
+    canvasScale,
+    editingCalloutTargetAnnotation,
+    layerOffsetX,
+    layerOffsetY,
+    renderedDocumentPosition.x,
+    renderedDocumentPosition.y,
+    scrollPosition.left,
+    scrollPosition.top,
+  ]);
+  const selectedImageCalloutToolbarStyle = useMemo(() => {
+    if (!editingImageCalloutPanel) {
+      return null;
+    }
+
+    const { panel } = editingImageCalloutPanel.geometry;
 
     return {
       left: (renderedDocumentPosition.x + panel.x) * canvasScale + layerOffsetX - scrollPosition.left,
@@ -823,7 +1053,7 @@ export function AnnotationCanvas({
     renderedDocumentPosition.y,
     scrollPosition.left,
     scrollPosition.top,
-    selectedImageCallout,
+    editingImageCalloutPanel,
   ]);
   const pendingInlineCalloutGeometry = useMemo<CalloutGeometry | null>(() => {
     if (
@@ -1034,7 +1264,12 @@ export function AnnotationCanvas({
   useEffect(() => {
     hasInitializedViewRef.current = false;
     setEditingLineId(null);
+    setEditingRectangleId(null);
+    setEditingCalloutTargetId(null);
+    setEditingImageCalloutPanelId(null);
     setLineEditPreview(null);
+    setLineDragPreview(null);
+    setRectangleEditPreview(null);
     zoomPreviewRef.current = null;
     clearZoomPreviewCommitTimeout();
     resetCanvasViewportSnapshot();
@@ -1060,8 +1295,40 @@ export function AnnotationCanvas({
     if (selectedAnnotationId !== editingLineId || !editingLineAnnotation) {
       setEditingLineId(null);
       setLineEditPreview(null);
+      setLineDragPreview(null);
     }
   }, [editingLineAnnotation, editingLineId, selectedAnnotationId]);
+
+  useEffect(() => {
+    if (!editingRectangleId) {
+      return;
+    }
+
+    if (selectedAnnotationId !== editingRectangleId || !editingRectangleAnnotation) {
+      setEditingRectangleId(null);
+      setRectangleEditPreview(null);
+    }
+  }, [editingRectangleAnnotation, editingRectangleId, selectedAnnotationId]);
+
+  useEffect(() => {
+    if (!editingCalloutTargetId) {
+      return;
+    }
+
+    if (selectedAnnotationId !== editingCalloutTargetId || !editingCalloutTargetAnnotation) {
+      setEditingCalloutTargetId(null);
+    }
+  }, [editingCalloutTargetAnnotation, editingCalloutTargetId, selectedAnnotationId]);
+
+  useEffect(() => {
+    if (!editingImageCalloutPanelId) {
+      return;
+    }
+
+    if (selectedAnnotationId !== editingImageCalloutPanelId || !editingImageCalloutPanel) {
+      setEditingImageCalloutPanelId(null);
+    }
+  }, [editingImageCalloutPanel, editingImageCalloutPanelId, selectedAnnotationId]);
 
   useEffect(() => {
     if (zoomPreviewRef.current) {
@@ -1759,6 +2026,17 @@ export function AnnotationCanvas({
     if (annotation.id !== editingLineId) {
       setEditingLineId(null);
       setLineEditPreview(null);
+      setLineDragPreview(null);
+    }
+    if (annotation.id !== editingRectangleId) {
+      setEditingRectangleId(null);
+      setRectangleEditPreview(null);
+    }
+    if (annotation.id !== editingCalloutTargetId) {
+      setEditingCalloutTargetId(null);
+    }
+    if (annotation.id !== editingImageCalloutPanelId) {
+      setEditingImageCalloutPanelId(null);
     }
     setSelectedAnnotation(annotation.id);
     openContextMenu(
@@ -1770,13 +2048,55 @@ export function AnnotationCanvas({
   const startLineEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setEditingRectangleId(null);
+    setRectangleEditPreview(null);
     setEditingLineId(annotationId);
     setLineEditPreview(null);
+    setLineDragPreview(null);
+  }, [setActiveTool, setSelectedAnnotation]);
+
+  const startRectangleEditing = useCallback((annotationId: string) => {
+    setActiveTool('select');
+    setSelectedAnnotation(annotationId);
+    setEditingLineId(null);
+    setLineEditPreview(null);
+    setLineDragPreview(null);
+    setEditingRectangleId(annotationId);
+    setRectangleEditPreview(null);
+  }, [setActiveTool, setSelectedAnnotation]);
+
+  const startCalloutTargetEditing = useCallback((annotationId: string) => {
+    setActiveTool('select');
+    setSelectedAnnotation(annotationId);
+    setEditingLineId(null);
+    setLineEditPreview(null);
+    setLineDragPreview(null);
+    setEditingRectangleId(null);
+    setRectangleEditPreview(null);
+    setEditingCalloutTargetId(annotationId);
+    setEditingImageCalloutPanelId(null);
+  }, [setActiveTool, setSelectedAnnotation]);
+
+  const startImageCalloutPanelEditing = useCallback((annotationId: string) => {
+    setActiveTool('select');
+    setSelectedAnnotation(annotationId);
+    setEditingLineId(null);
+    setLineEditPreview(null);
+    setLineDragPreview(null);
+    setEditingRectangleId(null);
+    setRectangleEditPreview(null);
+    setEditingCalloutTargetId(null);
+    setEditingImageCalloutPanelId(annotationId);
   }, [setActiveTool, setSelectedAnnotation]);
 
   const clearCanvasSelection = useCallback(() => {
     setEditingLineId(null);
+    setEditingRectangleId(null);
+    setEditingCalloutTargetId(null);
+    setEditingImageCalloutPanelId(null);
     setLineEditPreview(null);
+    setLineDragPreview(null);
+    setRectangleEditPreview(null);
     setSelectedAnnotation(null);
   }, [setSelectedAnnotation]);
 
@@ -1797,6 +2117,42 @@ export function AnnotationCanvas({
     });
   }, [editingLineAnnotation, updateAnnotation]);
 
+  const updateEditingRectangleStyle = useCallback((patch: Partial<Annotation['style']>) => {
+    if (!editingRectangleAnnotation) {
+      return;
+    }
+
+    updateAnnotation(editingRectangleAnnotation.id, (current) => {
+      if (current.tool !== 'rectangle' || current.geometry.kind !== 'rect') {
+        return;
+      }
+
+      current.style = {
+        ...current.style,
+        ...patch,
+        fill: 'rgba(255,255,255,0)',
+      };
+    });
+  }, [editingRectangleAnnotation, updateAnnotation]);
+  const updateSelectedCalloutColor = useCallback((patch: Partial<Annotation['style']>) => {
+    const annotationId = editingCalloutTargetAnnotation?.annotation.id;
+
+    if (!annotationId) {
+      return;
+    }
+
+    updateAnnotation(annotationId, (current) => {
+      if (current.tool !== 'callout' && current.tool !== 'image-callout') {
+        return;
+      }
+
+      current.style = {
+        ...current.style,
+        ...patch,
+      };
+    });
+  }, [editingCalloutTargetAnnotation?.annotation.id, updateAnnotation]);
+
   const commitLinePoints = useCallback((annotationId: string, points: [number, number, number, number]) => {
     updateAnnotation(annotationId, (current) => {
       if (current.tool !== 'line' || current.geometry.kind !== 'line') {
@@ -1809,6 +2165,7 @@ export function AnnotationCanvas({
       };
     });
     setLineEditPreview(null);
+    setLineDragPreview(null);
   }, [updateAnnotation]);
   const handleContextMenuAction = (actionId: ContextMenuActionId) => {
     const target = contextMenu.target;
@@ -2066,6 +2423,17 @@ export function AnnotationCanvas({
         if (annotation.id !== editingLineId) {
           setEditingLineId(null);
           setLineEditPreview(null);
+          setLineDragPreview(null);
+        }
+        if (annotation.id !== editingRectangleId) {
+          setEditingRectangleId(null);
+          setRectangleEditPreview(null);
+        }
+        if (annotation.id !== editingCalloutTargetId) {
+          setEditingCalloutTargetId(null);
+        }
+        if (annotation.id !== editingImageCalloutPanelId) {
+          setEditingImageCalloutPanelId(null);
         }
         setSelectedAnnotation(annotation.id);
       },
@@ -2073,6 +2441,17 @@ export function AnnotationCanvas({
         if (annotation.id !== editingLineId) {
           setEditingLineId(null);
           setLineEditPreview(null);
+          setLineDragPreview(null);
+        }
+        if (annotation.id !== editingRectangleId) {
+          setEditingRectangleId(null);
+          setRectangleEditPreview(null);
+        }
+        if (annotation.id !== editingCalloutTargetId) {
+          setEditingCalloutTargetId(null);
+        }
+        if (annotation.id !== editingImageCalloutPanelId) {
+          setEditingImageCalloutPanelId(null);
         }
         setSelectedAnnotation(annotation.id);
       },
@@ -2080,7 +2459,81 @@ export function AnnotationCanvas({
     };
 
     switch (annotation.tool) {
-      case 'rectangle':
+      case 'rectangle': {
+        if (geometry.kind !== 'rect') {
+          return null;
+        }
+
+        const isEditingRectangle = !readOnly && !isPreview && editingRectangleId === annotation.id;
+        const renderedRectangleGeometry =
+          rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
+        const rectangleStrokeWidth = annotation.style.strokeWidth ?? 3;
+        const rectangleDashSize =
+          annotation.style.lineDashSize ?? (annotation.style.lineDash === 'dashed' ? 6 : 0);
+        const rectangleDash = rectangleDashSize > 0 ? [rectangleDashSize * 2, rectangleDashSize] : undefined;
+
+        return (
+          <Group
+            key={annotation.id}
+            x={renderedDocumentPosition.x + renderedRectangleGeometry.x}
+            y={renderedDocumentPosition.y + renderedRectangleGeometry.y}
+            draggable={!readOnly && activeTool === 'select' && !isPreview}
+            {...commonProps}
+            onDblClick={() => startRectangleEditing(annotation.id)}
+            onDblTap={() => startRectangleEditing(annotation.id)}
+            onDragMove={(event) => {
+              if (!isEditingRectangle) {
+                return;
+              }
+
+              const pos = event.target.position();
+              setRectangleEditPreview({
+                annotationId: annotation.id,
+                geometry: {
+                  ...geometry,
+                  x: pos.x - renderedDocumentPosition.x,
+                  y: pos.y - renderedDocumentPosition.y,
+                },
+              });
+            }}
+            onDragEnd={(event) => {
+              const pos = event.target.position();
+              updateAnnotation(annotation.id, (current) => {
+                if (current.geometry.kind === 'rect') {
+                  current.geometry = {
+                    ...current.geometry,
+                    x: pos.x - renderedDocumentPosition.x,
+                    y: pos.y - renderedDocumentPosition.y,
+                  };
+                }
+              });
+              setRectangleEditPreview(null);
+            }}
+          >
+            {isEditingRectangle ? (
+              <Rect
+                width={renderedRectangleGeometry.width}
+                height={renderedRectangleGeometry.height}
+                stroke="#60a5fa"
+                strokeWidth={rectangleStrokeWidth + 4 / Math.max(canvasScale, 0.75)}
+                opacity={0.22}
+                cornerRadius={8}
+                listening={false}
+              />
+            ) : null}
+            <Rect
+              width={renderedRectangleGeometry.width}
+              height={renderedRectangleGeometry.height}
+              stroke={annotation.style.stroke}
+              strokeWidth={rectangleStrokeWidth}
+              fill="rgba(255,255,255,0)"
+              dash={rectangleDash}
+              cornerRadius={8}
+            />
+          </Group>
+        );
+      }
+
       case 'highlight':
       case 'blur': {
         if (geometry.kind !== 'rect') {
@@ -2130,6 +2583,10 @@ export function AnnotationCanvas({
             ? lineEditPreview.points
             : geometry.points;
         const isEditingLine = !readOnly && !isPreview && editingLineId === annotation.id;
+        const dragOffset =
+          lineDragPreview?.annotationId === annotation.id
+            ? { x: lineDragPreview.dx, y: lineDragPreview.dy }
+            : { x: 0, y: 0 };
         const lineStrokeWidth = annotation.style.strokeWidth ?? 4;
         const lineDashSize = annotation.style.lineDashSize ?? (annotation.style.lineDash === 'dashed' ? 6 : 0);
         const lineDash = lineDashSize > 0 ? [lineDashSize * 2, lineDashSize] : undefined;
@@ -2149,12 +2606,24 @@ export function AnnotationCanvas({
         return (
           <Group
             key={annotation.id}
-            x={renderedDocumentPosition.x}
-            y={renderedDocumentPosition.y}
+            x={renderedDocumentPosition.x + dragOffset.x}
+            y={renderedDocumentPosition.y + dragOffset.y}
             {...commonProps}
             draggable={isEditingLine}
             onDblClick={() => startLineEditing(annotation.id)}
             onDblTap={() => startLineEditing(annotation.id)}
+            onDragMove={(event) => {
+              if (!isEditingLine) {
+                return;
+              }
+
+              const pos = event.target.position();
+              setLineDragPreview({
+                annotationId: annotation.id,
+                dx: pos.x - renderedDocumentPosition.x,
+                dy: pos.y - renderedDocumentPosition.y,
+              });
+            }}
             onDragEnd={(event) => {
               if (!isEditingLine) {
                 return;
@@ -2470,7 +2939,7 @@ export function AnnotationCanvas({
         const relativeGeometry = getRelativeCalloutGeometry(renderedGeometry, calloutBounds);
         const connectorPoints = getCalloutConnectorPoints(relativeGeometry);
         const textBackgroundColor = annotation.style.textBackgroundColor ?? '#ffffff';
-        const borderColor = selected ? '#2563eb' : '#94a3b8';
+        const borderColor = annotation.style.stroke;
         const groupX = renderedDocumentPosition.x + calloutBounds.x;
         const groupY = renderedDocumentPosition.y + calloutBounds.y;
 
@@ -2530,6 +2999,18 @@ export function AnnotationCanvas({
               onDragStart={(event) => {
                 event.cancelBubble = true;
                 setSelectedAnnotation(annotation.id);
+              }}
+              onDblClick={(event) => {
+                event.cancelBubble = true;
+                if (!readOnly) {
+                  startCalloutTargetEditing(annotation.id);
+                }
+              }}
+              onDblTap={(event) => {
+                event.cancelBubble = true;
+                if (!readOnly) {
+                  startCalloutTargetEditing(annotation.id);
+                }
               }}
               onDragMove={(event) => {
                 const position = event.target.position();
@@ -2675,7 +3156,7 @@ export function AnnotationCanvas({
         const calloutBounds = getImageCalloutBounds(renderedGeometry);
         const relativeGeometry = getRelativeImageCalloutGeometry(renderedGeometry, calloutBounds);
         const connectorPoints = getCalloutConnectorPoints(relativeGeometry);
-        const borderColor = selected ? '#2563eb' : '#94a3b8';
+        const borderColor = annotation.style.stroke;
         const groupX = renderedDocumentPosition.x + calloutBounds.x;
         const groupY = renderedDocumentPosition.y + calloutBounds.y;
         const embeddedAsset = annotation.imageAssetId ? embeddedAssetsById.get(annotation.imageAssetId) : undefined;
@@ -2737,6 +3218,18 @@ export function AnnotationCanvas({
                 event.cancelBubble = true;
                 setSelectedAnnotation(annotation.id);
               }}
+              onDblClick={(event) => {
+                event.cancelBubble = true;
+                if (!readOnly) {
+                  startCalloutTargetEditing(annotation.id);
+                }
+              }}
+              onDblTap={(event) => {
+                event.cancelBubble = true;
+                if (!readOnly) {
+                  startCalloutTargetEditing(annotation.id);
+                }
+              }}
               onDragMove={(event) => {
                 const position = event.target.position();
                 setDraggingCalloutTargetFrame({
@@ -2790,6 +3283,18 @@ export function AnnotationCanvas({
               onDragStart={(event) => {
                 event.cancelBubble = true;
                 setSelectedAnnotation(annotation.id);
+              }}
+              onDblClick={(event) => {
+                event.cancelBubble = true;
+                if (!readOnly) {
+                  startImageCalloutPanelEditing(annotation.id);
+                }
+              }}
+              onDblTap={(event) => {
+                event.cancelBubble = true;
+                if (!readOnly) {
+                  startImageCalloutPanelEditing(annotation.id);
+                }
               }}
               onDragMove={(event) => {
                 const position = event.target.position();
@@ -3062,25 +3567,55 @@ export function AnnotationCanvas({
           />
         ) : null}
 
-        {lineToolbarPosition && editingLineAnnotation ? (
+        {(lineToolbarRect && editingLineAnnotation) || (rectangleToolbarRect && editingRectangleAnnotation) ? (
           <>
             <div
               ref={setLineToolbarReference}
-              className="pointer-events-none absolute size-px"
+              className="pointer-events-none absolute"
               style={{
-                left: lineToolbarPosition.left,
-                top: lineToolbarPosition.top,
+                left: lineToolbarRect?.left ?? rectangleToolbarRect?.left,
+                top: lineToolbarRect?.top ?? rectangleToolbarRect?.top,
+                width: lineToolbarRect?.width ?? rectangleToolbarRect?.width,
+                height: lineToolbarRect?.height ?? rectangleToolbarRect?.height,
               }}
             />
             <FloatingLineStyleToolbar
               isOpen
               reference={lineToolbarReference}
-              style={editingLineAnnotation.style}
-              onChange={updateEditingLineStyle}
+              style={editingLineAnnotation?.style ?? editingRectangleAnnotation?.style ?? getDefaultStyle('line')}
+              onChange={editingLineAnnotation ? updateEditingLineStyle : updateEditingRectangleStyle}
+              showMarkers={Boolean(editingLineAnnotation)}
             />
           </>
         ) : null}
-        {selectedImageCallout && selectedImageCalloutToolbarStyle && !readOnly && activeTool === 'select' ? (
+        {selectedCalloutColorToolbarRect &&
+        editingCalloutTargetAnnotation &&
+        !readOnly &&
+        activeTool === 'select' &&
+        inlineTextEditor?.annotationId !== editingCalloutTargetAnnotation.annotation.id ? (
+          <>
+            <div
+              ref={setCalloutColorToolbarReference}
+              className="pointer-events-none absolute"
+              style={{
+                left: selectedCalloutColorToolbarRect.left,
+                top: selectedCalloutColorToolbarRect.top,
+                width: selectedCalloutColorToolbarRect.width,
+                height: selectedCalloutColorToolbarRect.height,
+              }}
+            />
+            <FloatingLineStyleToolbar
+              isOpen
+              reference={calloutColorToolbarReference}
+              style={editingCalloutTargetAnnotation.annotation.style}
+              onChange={updateSelectedCalloutColor}
+              showMarkers={false}
+              showStrokeWidth={false}
+              showDash={false}
+            />
+          </>
+        ) : null}
+        {editingImageCalloutPanel && selectedImageCalloutToolbarStyle && !readOnly && activeTool === 'select' ? (
           <FloatingImageCalloutToolbar
             isOpen
             style={selectedImageCalloutToolbarStyle}

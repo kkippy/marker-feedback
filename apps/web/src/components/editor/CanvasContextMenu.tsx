@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ContextMenuActionId, ContextMenuItem } from './contextMenuItems';
 import { getContextMenuDockMotion } from './canvasContextMenuMotion';
@@ -27,11 +28,13 @@ export function CanvasContextMenu({
   const [transformOrigin, setTransformOrigin] = useState('20px 20px');
   const [pointerPosition, setPointerPosition] = useState<{ x: number; y: number } | null>(null);
   const [isEntering, setIsEntering] = useState(isOpen);
+  const [openSubmenuId, setOpenSubmenuId] = useState<ContextMenuActionId | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setPointerPosition(null);
       setIsEntering(false);
+      setOpenSubmenuId(null);
       wasOpenRef.current = false;
       return;
     }
@@ -129,7 +132,7 @@ export function CanvasContextMenu({
       data-state={isEntering ? 'opening' : 'open'}
       style={style}
       className={cn(
-        'absolute z-30 w-max min-w-44 overflow-hidden rounded-[22px] border border-white/70 bg-white/92 p-1.5 shadow-[0_20px_50px_rgba(15,23,42,0.16),0_8px_18px_rgba(15,23,42,0.10)] backdrop-blur-xl transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
+        'absolute z-30 w-max min-w-44 overflow-visible rounded-[22px] border border-white/70 bg-white/92 p-1.5 shadow-[0_20px_50px_rgba(15,23,42,0.16),0_8px_18px_rgba(15,23,42,0.10)] backdrop-blur-xl transition-[opacity,transform] duration-[240ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
         isEntering ? 'translate-y-2 scale-[0.92] opacity-0' : 'translate-y-0 scale-100 opacity-100',
       )}
       onMouseMove={(event) => {
@@ -153,9 +156,8 @@ export function CanvasContextMenu({
             transform: `translate3d(0, ${motion.itemTranslateY}px, 0) scale(${motion.itemScale})`,
           } as CSSProperties;
 
-          return (
+          const itemButton = (
             <button
-              key={item.id}
               ref={(element) => {
                 itemRefs.current[item.id] = element;
               }}
@@ -163,13 +165,19 @@ export function CanvasContextMenu({
               role="menuitem"
               data-testid={`context-menu-item-${item.id}`}
               style={itemStyle}
+              aria-haspopup={item.children ? 'menu' : undefined}
+              aria-expanded={item.children ? openSubmenuId === item.id : undefined}
               className={cn(
                 'relative flex w-full items-center gap-3 whitespace-nowrap rounded-2xl px-3.5 py-2.5 text-left text-[13px] font-medium tracking-[0.01em] transition-[background-color,color,box-shadow,transform] duration-200 ease-out will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70',
                 item.danger
                   ? 'text-rose-600 hover:text-rose-700'
                   : 'text-slate-700 hover:text-slate-900',
               )}
-              onClick={() => onSelect(item.id)}
+              onClick={() => {
+                if (!item.children) {
+                  onSelect(item.id);
+                }
+              }}
             >
               <span
                 aria-hidden="true"
@@ -201,7 +209,65 @@ export function CanvasContextMenu({
               >
                 {item.label}
               </span>
+              {item.children ? (
+                <ChevronRight className="relative z-10 ml-auto size-4 text-slate-400" />
+              ) : null}
             </button>
+          );
+
+          if (!item.children?.length) {
+            return <div key={item.id}>{itemButton}</div>;
+          }
+
+          return (
+            <div
+              key={item.id}
+              className="relative"
+              onMouseEnter={() => setOpenSubmenuId(item.id)}
+              onMouseLeave={() => setOpenSubmenuId((current) => (current === item.id ? null : current))}
+              onFocusCapture={() => setOpenSubmenuId(item.id)}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setOpenSubmenuId((current) => (current === item.id ? null : current));
+                }
+              }}
+            >
+              {itemButton}
+              <div
+                className={cn(
+                  'absolute left-full top-0 z-40 pl-2',
+                  openSubmenuId === item.id ? 'pointer-events-auto' : 'pointer-events-none',
+                )}
+              >
+                <div
+                  role="menu"
+                  className={cn(
+                    'min-w-44 rounded-[22px] border border-white/70 bg-white/92 p-1.5 shadow-[0_20px_50px_rgba(15,23,42,0.16),0_8px_18px_rgba(15,23,42,0.10)] backdrop-blur-xl',
+                    openSubmenuId === item.id ? 'block' : 'hidden',
+                  )}
+                >
+                  {item.children.map((child) => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      role="menuitem"
+                      data-testid={`context-menu-item-${child.id}`}
+                      className="group relative flex w-full items-center gap-3 whitespace-nowrap rounded-2xl px-3.5 py-2.5 text-left text-[13px] font-medium tracking-[0.01em] text-slate-700 transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70"
+                      onClick={() => onSelect(child.id)}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 rounded-2xl bg-slate-900/[0.055] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                      />
+                      <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-600">
+                        <child.icon className="size-4 shrink-0" />
+                      </span>
+                      <span className="relative z-10 pr-1">{child.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           );
         })()
       ))}

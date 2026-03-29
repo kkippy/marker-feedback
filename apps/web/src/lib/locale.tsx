@@ -69,6 +69,7 @@ export interface WebMessages {
   };
   tools: {
     title: string;
+    calloutGroup?: string;
     labels: Record<AnnotationTool, string>;
   };
   contextMenu: {
@@ -78,6 +79,7 @@ export interface WebMessages {
     arrow: string;
     highlight: string;
     marker: string;
+    calloutGroup?: string;
     callout: string;
     imageCallout: string;
     editText: string;
@@ -163,6 +165,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
     },
     tools: {
       title: 'Tools',
+      calloutGroup: 'Callout',
       labels: {
         select: 'Select',
         rectangle: 'Rect',
@@ -172,7 +175,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
         text: 'Text',
         blur: 'Blur',
         marker: 'Marker',
-        callout: 'Callout',
+        callout: 'Text Callout',
         'image-callout': 'Image Callout',
       },
     },
@@ -183,7 +186,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
       arrow: 'Arrow',
       highlight: 'Highlight',
       marker: 'Marker',
-      callout: 'Callout',
+      calloutGroup: 'Callout',
+      callout: 'Text callout',
       imageCallout: 'Image callout',
       editText: 'Edit text',
       replaceImage: 'Replace image',
@@ -312,6 +316,13 @@ const messages: Record<SupportedLocale, WebMessages> = {
     },
   },
 };
+
+messages['zh-CN'].tools.calloutGroup = '引出';
+messages['zh-CN'].contextMenu.calloutGroup = '引出';
+messages['zh-CN'].tools.labels.callout = '文本引出';
+messages['zh-CN'].tools.labels['image-callout'] = '图片引出';
+messages['zh-CN'].contextMenu.callout = '文本引出';
+messages['zh-CN'].contextMenu.imageCallout = '图片引出';
 
 const resolveStoredPreference = (value: string | null): LocalePreference =>
   localePreferences.includes(value as LocalePreference) ? (value as LocalePreference) : 'system';

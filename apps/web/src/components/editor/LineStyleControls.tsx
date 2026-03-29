@@ -506,9 +506,15 @@ function NumericScrubInput({
 export function LineStyleControls({
   style,
   onChange,
+  showMarkers = true,
+  showStrokeWidth = true,
+  showDash = true,
 }: {
   style: AnnotationStyle;
   onChange: (patch: Partial<AnnotationStyle>) => void;
+  showMarkers?: boolean;
+  showStrokeWidth?: boolean;
+  showDash?: boolean;
 }) {
   const { locale } = useLocale();
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
@@ -659,63 +665,71 @@ export function LineStyleControls({
         </div>
       </div>
 
-      <NumericScrubInput
-        label={labels.width}
-        scrubLabel={labels.widthScrub}
-        icon={<StrokeWidthIcon />}
-        type="strokeWidth"
-        value={strokeWidth}
-        inputValue={strokeWidthInput}
-        onInputValueChange={setStrokeWidthInput}
-        onChange={updateStrokeWidth}
-      />
-
-      <NumericScrubInput
-        label={labels.dash}
-        scrubLabel={labels.dashScrub}
-        icon={<DashPatternIcon />}
-        type="lineDashSize"
-        value={dashSize}
-        inputValue={dashSizeInput}
-        onInputValueChange={setDashSizeInput}
-        onChange={updateDashSize}
-      />
-
-      <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1">
-        <span className="text-xs font-medium text-slate-500" title={labels.startMenu}>{labels.start}</span>
-        <MarkerDropdown
-          direction="start"
-          menuLabel={labels.startMenu}
-          value={startMarker}
-          isOpen={openMarkerMenu === 'start'}
-          pointerPosition={openMarkerMenu === 'start' ? markerMenuPointer : null}
-          optionLabel={(value) => labels.markerOption[value]}
-          onOpenChange={(open) => {
-            setOpenMarkerMenu(open ? 'start' : null);
-            setMarkerMenuPointer(null);
-          }}
-          onPointerPositionChange={setMarkerMenuPointer}
-          onChange={(nextValue) => onChange({ lineStartMarker: nextValue })}
+      {showStrokeWidth ? (
+        <NumericScrubInput
+          label={labels.width}
+          scrubLabel={labels.widthScrub}
+          icon={<StrokeWidthIcon />}
+          type="strokeWidth"
+          value={strokeWidth}
+          inputValue={strokeWidthInput}
+          onInputValueChange={setStrokeWidthInput}
+          onChange={updateStrokeWidth}
         />
-      </div>
+      ) : null}
 
-      <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1">
-        <span className="text-xs font-medium text-slate-500" title={labels.endMenu}>{labels.end}</span>
-        <MarkerDropdown
-          direction="end"
-          menuLabel={labels.endMenu}
-          value={endMarker}
-          isOpen={openMarkerMenu === 'end'}
-          pointerPosition={openMarkerMenu === 'end' ? markerMenuPointer : null}
-          optionLabel={(value) => labels.markerOption[value]}
-          onOpenChange={(open) => {
-            setOpenMarkerMenu(open ? 'end' : null);
-            setMarkerMenuPointer(null);
-          }}
-          onPointerPositionChange={setMarkerMenuPointer}
-          onChange={(nextValue) => onChange({ lineEndMarker: nextValue })}
+      {showDash ? (
+        <NumericScrubInput
+          label={labels.dash}
+          scrubLabel={labels.dashScrub}
+          icon={<DashPatternIcon />}
+          type="lineDashSize"
+          value={dashSize}
+          inputValue={dashSizeInput}
+          onInputValueChange={setDashSizeInput}
+          onChange={updateDashSize}
         />
-      </div>
+      ) : null}
+
+      {showMarkers ? (
+        <>
+          <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1">
+            <span className="text-xs font-medium text-slate-500" title={labels.startMenu}>{labels.start}</span>
+            <MarkerDropdown
+              direction="start"
+              menuLabel={labels.startMenu}
+              value={startMarker}
+              isOpen={openMarkerMenu === 'start'}
+              pointerPosition={openMarkerMenu === 'start' ? markerMenuPointer : null}
+              optionLabel={(value) => labels.markerOption[value]}
+              onOpenChange={(open) => {
+                setOpenMarkerMenu(open ? 'start' : null);
+                setMarkerMenuPointer(null);
+              }}
+              onPointerPositionChange={setMarkerMenuPointer}
+              onChange={(nextValue) => onChange({ lineStartMarker: nextValue })}
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1">
+            <span className="text-xs font-medium text-slate-500" title={labels.endMenu}>{labels.end}</span>
+            <MarkerDropdown
+              direction="end"
+              menuLabel={labels.endMenu}
+              value={endMarker}
+              isOpen={openMarkerMenu === 'end'}
+              pointerPosition={openMarkerMenu === 'end' ? markerMenuPointer : null}
+              optionLabel={(value) => labels.markerOption[value]}
+              onOpenChange={(open) => {
+                setOpenMarkerMenu(open ? 'end' : null);
+                setMarkerMenuPointer(null);
+              }}
+              onPointerPositionChange={setMarkerMenuPointer}
+              onChange={(nextValue) => onChange({ lineEndMarker: nextValue })}
+            />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
