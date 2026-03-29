@@ -24,6 +24,18 @@ create table if not exists annotations (
   created_at timestamptz not null default now()
 );
 
+create table if not exists embedded_image_assets (
+  id text primary key,
+  asset_id text not null references image_assets(id) on delete cascade,
+  image_data_url text not null,
+  width integer not null,
+  height integer not null,
+  created_at timestamptz not null default now()
+);
+
+alter table annotations
+  add column if not exists image_asset_id text references embedded_image_assets(id) on delete set null;
+
 create table if not exists threads (
   id text primary key,
   asset_id text not null references image_assets(id) on delete cascade,
@@ -43,6 +55,7 @@ create table if not exists comments (
 );
 
 alter table image_assets enable row level security;
+alter table embedded_image_assets enable row level security;
 alter table share_items enable row level security;
 alter table annotations enable row level security;
 alter table threads enable row level security;
@@ -59,6 +72,13 @@ drop policy if exists "Public read share items" on share_items;
 create policy "Public read share items" on share_items for select using (true);
 drop policy if exists "Public insert share items" on share_items;
 create policy "Public insert share items" on share_items for insert with check (true);
+
+drop policy if exists "Public read embedded image assets" on embedded_image_assets;
+create policy "Public read embedded image assets" on embedded_image_assets for select using (true);
+drop policy if exists "Public insert embedded image assets" on embedded_image_assets;
+create policy "Public insert embedded image assets" on embedded_image_assets for insert with check (true);
+drop policy if exists "Public update embedded image assets" on embedded_image_assets;
+create policy "Public update embedded image assets" on embedded_image_assets for update using (true) with check (true);
 
 drop policy if exists "Public read annotations" on annotations;
 create policy "Public read annotations" on annotations for select using (true);
