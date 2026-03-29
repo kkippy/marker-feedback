@@ -6,12 +6,14 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { AnnotationStyle } from '@marker/shared';
 import { FloatingTextStyleToolbar } from './FloatingTextStyleToolbar';
+import type { ViewportMetrics } from './canvasViewportStore';
+import { useCanvasViewportSnapshot } from './canvasViewportStore';
+import { getInlineTextOverlayStyle } from './inlineTextOverlay';
 import { getResizePreviewForHandle, type ResizeHandle, type TextFrame } from './textResizeScaling';
 
 const BASE_LINE_HEIGHT = 1.45;
@@ -53,10 +55,10 @@ const getCssFontStyle = (fontStyle: AnnotationStyle['fontStyle']) => (fontStyle 
 export function InlineTextEditor({
   isOpen,
   value,
-  style,
   frame,
+  documentPosition,
   textStyle,
-  canvasScale,
+  fallbackViewport,
   onChange,
   onTextStyleChange,
   onSizeChange,
@@ -66,10 +68,10 @@ export function InlineTextEditor({
 }: {
   isOpen: boolean;
   value: string;
-  style: CSSProperties;
   frame: { x: number; y: number; width: number; height: number };
+  documentPosition: { x: number; y: number };
   textStyle: AnnotationStyle;
-  canvasScale: number;
+  fallbackViewport: ViewportMetrics;
   onChange: (value: string) => void;
   onTextStyleChange: (patch: Partial<AnnotationStyle>) => void;
   onSizeChange: (size: { width: number; height: number }) => void;
@@ -90,6 +92,7 @@ export function InlineTextEditor({
   const [resizePreview, setResizePreview] = useState<ResizePreviewState | null>(null);
   const [referenceElement, setReferenceElement] = useState<HTMLDivElement | null>(null);
   const textareaId = useId();
+  const viewport = useCanvasViewportSnapshot(fallbackViewport);
   const fontSize = textStyle.fontSize ?? 14;
   const displayFontSize = resizePreview?.fontSize ?? fontSize;
   const fontWeight = textStyle.fontWeight ?? 'normal';
@@ -98,18 +101,50 @@ export function InlineTextEditor({
   const textDecoration = textStyle.textDecoration ?? 'none';
   const textBackgroundColor = textStyle.textBackgroundColor ?? 'transparent';
   const displayFrame = resizePreview?.frame ?? frame;
+  const canvasScale = viewport.canvasScale;
   const textBoxMode = resizePreview ? 'manual' : (textStyle.textBoxMode ?? 'auto');
   const displayStyle = useMemo(() => {
+    const baseStyle = getInlineTextOverlayStyle({
+      annotationGeometry: {
+        kind: 'text',
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
+      },
+      documentPosition,
+      canvasScale: viewport.canvasScale,
+      layerOffsetX: viewport.layerOffsetX,
+      layerOffsetY: viewport.layerOffsetY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    });
+
     if (!resizePreview) {
-      return style;
+      return baseStyle;
     }
 
     return {
-      ...style,
-      left: typeof style.left === 'number' ? style.left + (displayFrame.x - frame.x) * canvasScale : style.left,
-      top: typeof style.top === 'number' ? style.top + (displayFrame.y - frame.y) * canvasScale : style.top,
+      ...baseStyle,
+      left: baseStyle.left + (displayFrame.x - frame.x) * canvasScale,
+      top: baseStyle.top + (displayFrame.y - frame.y) * canvasScale,
     };
-  }, [canvasScale, displayFrame.x, displayFrame.y, frame.x, frame.y, resizePreview, style]);
+  }, [
+    canvasScale,
+    displayFrame.x,
+    displayFrame.y,
+    documentPosition,
+    frame.height,
+    frame.width,
+    frame.x,
+    frame.y,
+    resizePreview,
+    viewport.canvasScale,
+    viewport.layerOffsetX,
+    viewport.layerOffsetY,
+    viewport.scrollLeft,
+    viewport.scrollTop,
+  ]);
   const scaledFontSize = useMemo(() => displayFontSize * canvasScale, [canvasScale, displayFontSize]);
   const scaledLineHeight = useMemo(() => displayFontSize * BASE_LINE_HEIGHT * canvasScale, [canvasScale, displayFontSize]);
   const minTextHeight = useMemo(() => Math.ceil(displayFontSize * BASE_LINE_HEIGHT), [displayFontSize]);

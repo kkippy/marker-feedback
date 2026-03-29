@@ -1,3 +1,3 @@
-export * from './types';
-export * from './geometry';
-export * from './token';
+export * from './types.js';
+export * from './geometry.js';
+export * from './token.js';

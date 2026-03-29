@@ -1,4 +1,4 @@
-export type AnnotationTool = 'select' | 'rectangle' | 'arrow' | 'highlight' | 'text' | 'blur' | 'marker';
+export type AnnotationTool = 'select' | 'rectangle' | 'line' | 'arrow' | 'highlight' | 'text' | 'blur' | 'marker';
 export type ThreadStatus = 'open' | 'resolved';
 export type AssetSourceType = 'upload' | 'capture' | 'draft';
 
@@ -26,6 +26,11 @@ export interface ArrowGeometry {
   points: [number, number, number, number];
 }
 
+export interface LineGeometry {
+  kind: 'line';
+  points: [number, number, number, number];
+}
+
 export interface MarkerGeometry {
   kind: 'marker';
   x: number;
@@ -40,12 +45,16 @@ export interface TextGeometry {
   height: number;
 }
 
-export type AnnotationGeometry = RectGeometry | ArrowGeometry | MarkerGeometry | TextGeometry;
+export type AnnotationGeometry = RectGeometry | ArrowGeometry | LineGeometry | MarkerGeometry | TextGeometry;
 
 export interface AnnotationStyle {
   stroke: string;
   fill?: string;
   strokeWidth?: number;
+  lineDash?: 'solid' | 'dashed';
+  lineDashSize?: number;
+  lineStartMarker?: 'none' | 'arrow' | 'bar' | 'dot';
+  lineEndMarker?: 'none' | 'arrow' | 'bar' | 'dot';
   textColor?: string;
   fontSize?: number;
   fontWeight?: 'normal' | 'bold';

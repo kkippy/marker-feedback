@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createShareToken } from './token';
+import { createShareToken } from './token.js';
 
 describe('createShareToken', () => {
   it('creates a 12 character token', () => {

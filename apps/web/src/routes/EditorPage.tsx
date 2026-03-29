@@ -5,8 +5,10 @@ import { FolderOpen, ImageUp, Redo2, Undo2 } from 'lucide-react';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
 import { CommentSidebar } from '@/components/editor/CommentSidebar';
 import { TopBar } from '@/components/editor/TopBar';
+import { ToolPalette } from '@/components/editor/ToolPalette';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
 import { getBootstrapPayload } from '@/lib/bootstrap';
 import { downloadDataUrl } from '@/lib/export';
 import { useLocale } from '@/lib/locale';
@@ -33,6 +35,7 @@ export function EditorPage() {
   const activeTool = useEditorStore((state) => state.activeTool);
   const zoom = useEditorStore((state) => state.zoom);
   const setDraft = useEditorStore((state) => state.setDraft);
+  const setActiveTool = useEditorStore((state) => state.setActiveTool);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetDraft = useEditorStore((state) => state.resetDraft);
@@ -112,30 +115,28 @@ export function EditorPage() {
           secondaryActions={
             draft.asset ? (
               <>
-                <Button
-                  type="button"
+                <ToolPalette activeTool={activeTool} onToolChange={setActiveTool} />
+                <ToolbarIconButton
+                  label={messages.editor.undo}
                   className="bg-slate-100 text-slate-700 hover:bg-slate-200"
                   onClick={undo}
                 >
                   <Undo2 className="size-4" />
-                  {messages.editor.undo}
-                </Button>
-                <Button
-                  type="button"
+                </ToolbarIconButton>
+                <ToolbarIconButton
+                  label={messages.editor.redo}
                   className="bg-slate-100 text-slate-700 hover:bg-slate-200"
                   onClick={redo}
                 >
                   <Redo2 className="size-4" />
-                  {messages.editor.redo}
-                </Button>
-                <Button
-                  type="button"
+                </ToolbarIconButton>
+                <ToolbarIconButton
+                  label={messages.editor.replaceImage}
                   className="bg-slate-100 text-slate-700 hover:bg-slate-200"
                   onClick={openFilePicker}
                 >
                   <ImageUp className="size-4" />
-                  {messages.editor.replaceImage}
-                </Button>
+                </ToolbarIconButton>
               </>
             ) : undefined
           }

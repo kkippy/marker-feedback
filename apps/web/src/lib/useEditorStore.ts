@@ -14,8 +14,10 @@ import {
 const cloneDraft = (draft: EditorDraft): EditorDraft => JSON.parse(JSON.stringify(draft));
 const now = () => new Date().toISOString();
 const MAX_ZOOM = 6;
+const BUTTON_ZOOM_FACTOR = 1.15;
 const DEFAULT_TEXT_WIDTH = 32;
 const DEFAULT_TEXT_HEIGHT = 24;
+
 export const DEFAULT_TEXT_STYLE: AnnotationStyle = {
   stroke: '#2563eb',
   fill: 'rgba(255,255,255,0)',
@@ -515,8 +517,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
     }),
   setZoom: (zoom) => set({ zoom: Math.max(0.5, Math.min(MAX_ZOOM, Number(zoom.toFixed(2)))) }),
-  zoomIn: () => set((state) => ({ zoom: Math.min(MAX_ZOOM, Number((state.zoom + 0.1).toFixed(2))) })),
-  zoomOut: () => set((state) => ({ zoom: Math.max(0.5, Number((state.zoom - 0.1).toFixed(2))) })),
+  zoomIn: () =>
+    set((state) => ({
+      zoom: Math.min(MAX_ZOOM, Number((state.zoom * BUTTON_ZOOM_FACTOR).toFixed(2))),
+    })),
+  zoomOut: () =>
+    set((state) => ({
+      zoom: Math.max(0.5, Number((state.zoom / BUTTON_ZOOM_FACTOR).toFixed(2))),
+    })),
   commitDraft: (mutator) =>
     set((state) => {
       const nextDraft = cloneDraft(state.draft);

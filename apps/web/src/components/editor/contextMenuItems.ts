@@ -4,6 +4,7 @@ import {
   Copy,
   Highlighter,
   Hash,
+  Minus,
   MousePointer2,
   ScanText,
   Square,
@@ -15,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 export type ContextMenuActionId =
   | 'add-text'
   | 'rectangle'
+  | 'line'
   | 'arrow'
   | 'highlight'
   | 'marker'
@@ -28,7 +30,7 @@ export interface ContextMenuItem {
   label: string;
   icon: LucideIcon;
   danger?: boolean;
-  tool?: Extract<AnnotationTool, 'rectangle' | 'arrow' | 'highlight' | 'marker' | 'text'>;
+  tool?: Extract<AnnotationTool, 'rectangle' | 'line' | 'arrow' | 'highlight' | 'marker' | 'text'>;
 }
 
 export type ContextMenuTarget =
@@ -38,6 +40,7 @@ export type ContextMenuTarget =
 export interface ContextMenuLabels {
   addText: string;
   rectangle: string;
+  line: string;
   arrow: string;
   highlight: string;
   marker: string;
@@ -50,6 +53,7 @@ export interface ContextMenuLabels {
 const defaultLabels: ContextMenuLabels = {
   addText: 'Add text',
   rectangle: 'Rectangle',
+  line: 'Line',
   arrow: 'Arrow',
   highlight: 'Highlight',
   marker: 'Marker',
@@ -62,6 +66,7 @@ const defaultLabels: ContextMenuLabels = {
 const getCreationItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
   { id: 'add-text', label: labels.addText, icon: Type, tool: 'text' },
   { id: 'rectangle', label: labels.rectangle, icon: Square, tool: 'rectangle' },
+  { id: 'line', label: labels.line, icon: Minus, tool: 'line' },
   { id: 'arrow', label: labels.arrow, icon: ArrowRight, tool: 'arrow' },
   { id: 'highlight', label: labels.highlight, icon: Highlighter, tool: 'highlight' },
   { id: 'marker', label: labels.marker, icon: Hash, tool: 'marker' },

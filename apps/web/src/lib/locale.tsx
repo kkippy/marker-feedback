@@ -46,7 +46,6 @@ export interface WebMessages {
     recentDraftsDescription: string;
     noDrafts: string;
     draftSummary: (annotationCount: number, hasAsset: boolean) => string;
-
     replaceImage: string;
     undo: string;
     redo: string;
@@ -75,6 +74,7 @@ export interface WebMessages {
   contextMenu: {
     addText: string;
     rectangle: string;
+    line: string;
     arrow: string;
     highlight: string;
     marker: string;
@@ -109,7 +109,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       selectAriaLabel: 'Choose interface language',
       options: {
         system: 'Follow system',
-        'zh-CN': '简体中文',
+        'zh-CN': '\u7b80\u4f53\u4e2d\u6587',
         en: 'English',
       },
     },
@@ -129,25 +129,24 @@ const messages: Record<SupportedLocale, WebMessages> = {
       intakeEyebrow: 'Asset intake',
       intakeTitle: 'Start a feedback session',
       intakeDescription:
-        'Upload a local image, open a recent draft, or let the extension open this page with a captured tab image.',
+        'Upload a local image, open the latest draft, or jump in from the extension with the current tab capture.',
       uploadImage: 'Upload image',
       openLatestDraft: 'Open latest draft',
       recentDraftsTitle: 'Recent drafts',
-      recentDraftsDescription: 'Resume previous edits without re-uploading the image.',
+      recentDraftsDescription: 'Resume previous work without re-uploading your screenshot.',
       noDrafts: 'No drafts yet.',
       draftSummary: (annotationCount, hasAsset) =>
-        `${annotationCount} annotations · ${hasAsset ? 'image ready' : 'missing asset'}`,
-
+        `${annotationCount} annotations \u00b7 ${hasAsset ? 'asset ready' : 'missing asset'}`,
       replaceImage: 'Replace image',
       undo: 'Undo',
       redo: 'Redo',
     },
     comments: {
-      title: 'Discussion',
+      title: 'Comments',
       description: 'Create general comments or attach feedback to the selected annotation.',
       selectedAnnotation: (annotationId) => `Selected annotation: ${annotationId}`,
       noAnnotationSelected: 'No annotation selected',
-      composerPlaceholder: 'Describe the issue, suggestion, or approval note...',
+      composerPlaceholder: 'Describe the issue, suggestion, or confirmation...',
       addComment: 'Add comment',
       noComments: 'No comments yet.',
       linkedTo: (annotationId) => `Linked to ${annotationId}`,
@@ -164,6 +163,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       labels: {
         select: 'Select',
         rectangle: 'Rect',
+        line: 'Line',
         arrow: 'Arrow',
         highlight: 'Highlight',
         text: 'Text',
@@ -174,6 +174,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
     contextMenu: {
       addText: 'Add text',
       rectangle: 'Rectangle',
+      line: 'Line',
       arrow: 'Arrow',
       highlight: 'Highlight',
       marker: 'Marker',
@@ -187,7 +188,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       textPromptDefault: 'Add note',
     },
     share: {
-      loading: 'Loading shared feedback…',
+      loading: 'Loading shared feedback...',
       missingTitle: 'Share link not found',
       missingDescription:
         'This token does not exist in local storage. Create a share link from the editor first.',
@@ -200,98 +201,106 @@ const messages: Record<SupportedLocale, WebMessages> = {
   },
   'zh-CN': {
     common: {
-      you: '你',
+      you: '\u4f60',
     },
     language: {
-      label: '语言',
-      selectAriaLabel: '选择界面语言',
+      label: '\u8bed\u8a00',
+      selectAriaLabel: '\u9009\u62e9\u754c\u9762\u8bed\u8a00',
       options: {
-        system: '跟随系统',
-        'zh-CN': '简体中文',
+        system: '\u8ddf\u968f\u7cfb\u7edf',
+        'zh-CN': '\u7b80\u4f53\u4e2d\u6587',
         en: 'English',
       },
     },
     topBar: {
-      annotations: (count) => `${count} 条标注`,
-      threads: (count) => `${count} 条讨论`,
-      zoom: (percent) => `缩放 ${percent}%`,
-      currentMode: (label) => `当前：${label}`,
-      zoomOutAriaLabel: '缩小',
-      zoomInAriaLabel: '放大',
-      reset: '重置',
-      exportPng: '导出 PNG',
-      saveDraft: '保存草稿',
-      createShareLink: '创建分享链接',
+      annotations: (count) => `${count} \u6761\u6807\u6ce8`,
+      threads: (count) => `${count} \u6761\u8ba8\u8bba`,
+      zoom: (percent) => `\u7f29\u653e ${percent}%`,
+      currentMode: (label) => `\u5f53\u524d\uff1a${label}`,
+      zoomOutAriaLabel: '\u7f29\u5c0f',
+      zoomInAriaLabel: '\u653e\u5927',
+      reset: '\u91cd\u7f6e',
+      exportPng: '\u5bfc\u51fa PNG',
+      saveDraft: '\u4fdd\u5b58\u8349\u7a3f',
+      createShareLink: '\u521b\u5efa\u5206\u4eab\u94fe\u63a5',
     },
     editor: {
-      intakeEyebrow: '素材导入',
-      intakeTitle: '开始一轮反馈',
-      intakeDescription: '上传本地图片、打开最近草稿，或由扩展携带当前标签页截图直接进入。',
-      uploadImage: '上传图片',
-      openLatestDraft: '打开最新草稿',
-      recentDraftsTitle: '最近草稿',
-      recentDraftsDescription: '无需重新上传图片，继续之前的编辑。',
-      noDrafts: '还没有草稿。',
+      intakeEyebrow: '\u7d20\u6750\u5bfc\u5165',
+      intakeTitle: '\u5f00\u59cb\u4e00\u8f6e\u53cd\u9988',
+      intakeDescription:
+        '\u4e0a\u4f20\u672c\u5730\u56fe\u7247\u3001\u6253\u5f00\u6700\u8fd1\u8349\u7a3f\uff0c\u6216\u7531\u6269\u5c55\u643a\u5e26\u5f53\u524d\u6807\u7b7e\u9875\u622a\u56fe\u76f4\u63a5\u8fdb\u5165\u3002',
+      uploadImage: '\u4e0a\u4f20\u56fe\u7247',
+      openLatestDraft: '\u6253\u5f00\u6700\u65b0\u8349\u7a3f',
+      recentDraftsTitle: '\u6700\u8fd1\u8349\u7a3f',
+      recentDraftsDescription:
+        '\u65e0\u9700\u91cd\u65b0\u4e0a\u4f20\u56fe\u7247\uff0c\u7ee7\u7eed\u4e4b\u524d\u7684\u7f16\u8f91\u3002',
+      noDrafts: '\u8fd8\u6ca1\u6709\u8349\u7a3f\u3002',
       draftSummary: (annotationCount, hasAsset) =>
-        `${annotationCount} 条标注 · ${hasAsset ? '图片已就绪' : '缺少图片资源'}`,
-
-      replaceImage: '替换图片',
-      undo: '撤销',
-      redo: '重做',
+        `${annotationCount} \u6761\u6807\u6ce8 \u00b7 ${
+          hasAsset ? '\u56fe\u7247\u5df2\u5c31\u7eea' : '\u7f3a\u5c11\u56fe\u7247\u8d44\u6e90'
+        }`,
+      replaceImage: '\u66ff\u6362\u56fe\u7247',
+      undo: '\u64a4\u9500',
+      redo: '\u91cd\u505a',
     },
     comments: {
-      title: '讨论',
-      description: '可以创建通用评论，或把反馈关联到当前选中的标注。',
-      selectedAnnotation: (annotationId) => `当前选中标注：${annotationId}`,
-      noAnnotationSelected: '暂未选中标注',
-      composerPlaceholder: '描述问题、建议，或确认说明…',
-      addComment: '添加评论',
-      noComments: '还没有评论。',
-      linkedTo: (annotationId) => `关联到 ${annotationId}`,
-      generalFeedbackLabel: '通用反馈',
-      annotationFeedbackTitle: '标注反馈',
-      generalFeedbackTitle: '通用反馈',
-      statusOpen: '待处理',
-      statusResolved: '已解决',
-      replyPlaceholder: '回复这条讨论…',
-      reply: '回复',
+      title: '\u8ba8\u8bba',
+      description:
+        '\u53ef\u4ee5\u521b\u5efa\u901a\u7528\u8bc4\u8bba\uff0c\u6216\u628a\u53cd\u9988\u5173\u8054\u5230\u5f53\u524d\u9009\u4e2d\u7684\u6807\u6ce8\u3002',
+      selectedAnnotation: (annotationId) => `\u5f53\u524d\u9009\u4e2d\u6807\u6ce8\uff1a${annotationId}`,
+      noAnnotationSelected: '\u6682\u672a\u9009\u4e2d\u6807\u6ce8',
+      composerPlaceholder: '\u63cf\u8ff0\u95ee\u9898\u3001\u5efa\u8bae\uff0c\u6216\u786e\u8ba4\u8bf4\u660e\u2026',
+      addComment: '\u6dfb\u52a0\u8bc4\u8bba',
+      noComments: '\u8fd8\u6ca1\u6709\u8bc4\u8bba\u3002',
+      linkedTo: (annotationId) => `\u5173\u8054\u5230 ${annotationId}`,
+      generalFeedbackLabel: '\u901a\u7528\u53cd\u9988',
+      annotationFeedbackTitle: '\u6807\u6ce8\u53cd\u9988',
+      generalFeedbackTitle: '\u901a\u7528\u53cd\u9988',
+      statusOpen: '\u5f85\u5904\u7406',
+      statusResolved: '\u5df2\u89e3\u51b3',
+      replyPlaceholder: '\u56de\u590d\u8fd9\u6761\u8ba8\u8bba\u2026',
+      reply: '\u56de\u590d',
     },
     tools: {
-      title: '工具',
+      title: '\u5de5\u5177',
       labels: {
-        select: '选择',
-        rectangle: '矩形',
-        arrow: '箭头',
-        highlight: '高亮',
-        text: '文本',
-        blur: '模糊',
-        marker: '编号',
+        select: '\u9009\u62e9',
+        rectangle: '\u77e9\u5f62',
+        line: '\u76f4\u7ebf',
+        arrow: '\u7bad\u5934',
+        highlight: '\u9ad8\u4eae',
+        text: '\u6587\u672c',
+        blur: '\u6a21\u7cca',
+        marker: '\u7f16\u53f7',
       },
     },
     contextMenu: {
-      addText: '添加文本',
-      rectangle: '矩形',
-      arrow: '箭头',
-      highlight: '高亮',
-      marker: '编号',
-      editText: '编辑文本',
-      copy: '复制',
-      delete: '删除',
-      bringToFront: '置于顶层',
+      addText: '\u6dfb\u52a0\u6587\u672c',
+      rectangle: '\u77e9\u5f62',
+      line: '\u76f4\u7ebf',
+      arrow: '\u7bad\u5934',
+      highlight: '\u9ad8\u4eae',
+      marker: '\u7f16\u53f7',
+      editText: '\u7f16\u8f91\u6587\u672c',
+      copy: '\u590d\u5236',
+      delete: '\u5220\u9664',
+      bringToFront: '\u7f6e\u4e8e\u9876\u5c42',
     },
     annotation: {
-      textPromptTitle: '文本备注',
-      textPromptDefault: '输入备注内容',
+      textPromptTitle: '\u6587\u672c\u5907\u6ce8',
+      textPromptDefault: '\u8f93\u5165\u5907\u6ce8\u5185\u5bb9',
     },
     share: {
-      loading: '正在加载共享反馈…',
-      missingTitle: '未找到分享链接',
-      missingDescription: '这个 token 不存在于本地存储中，请先在编辑器里创建分享链接。',
-      openEditor: '打开编辑器',
-      eyebrow: '共享评审',
-      token: (token) => `令牌：${token}`,
-      description: '匿名协作者可以回复评论，并切换问题状态。',
-      backToEditor: '返回编辑器',
+      loading: '\u6b63\u5728\u52a0\u8f7d\u5171\u4eab\u53cd\u9988...',
+      missingTitle: '\u672a\u627e\u5230\u5206\u4eab\u94fe\u63a5',
+      missingDescription:
+        '\u8fd9\u4e2a token \u4e0d\u5b58\u5728\u4e8e\u672c\u5730\u5b58\u50a8\u4e2d\uff0c\u8bf7\u5148\u5728\u7f16\u8f91\u5668\u91cc\u521b\u5efa\u5206\u4eab\u94fe\u63a5\u3002',
+      openEditor: '\u6253\u5f00\u7f16\u8f91\u5668',
+      eyebrow: '\u5171\u4eab\u8bc4\u5ba1',
+      token: (token) => `\u4ee4\u724c\uff1a${token}`,
+      description:
+        '\u533f\u540d\u534f\u4f5c\u8005\u53ef\u4ee5\u56de\u590d\u8bc4\u8bba\uff0c\u5e76\u5207\u6362\u95ee\u9898\u72b6\u6001\u3002',
+      backToEditor: '\u8fd4\u56de\u7f16\u8f91\u5668',
     },
   },
 };

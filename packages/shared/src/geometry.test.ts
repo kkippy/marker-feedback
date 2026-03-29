@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeRect } from './geometry';
+import { moveGeometry, normalizeRect } from './geometry.js';
 
 describe('normalizeRect', () => {
   it('creates a positive rectangle regardless of drag direction', () => {
@@ -9,6 +9,19 @@ describe('normalizeRect', () => {
       y: 20,
       width: 30,
       height: 40
+    });
+  });
+
+  it('moves line geometry by delta', () => {
+    expect(
+      moveGeometry(
+        { kind: 'line', points: [10, 20, 30, 40] },
+        5,
+        -10,
+      ),
+    ).toEqual({
+      kind: 'line',
+      points: [15, 10, 35, 30],
     });
   });
 });
