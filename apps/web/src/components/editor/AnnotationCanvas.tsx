@@ -19,7 +19,11 @@ import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
 import { useLoadedImage } from '@/lib/useLoadedImage';
 import { DEFAULT_TEXT_STYLE, useEditorStore } from '@/lib/useEditorStore';
-import { toDocumentLocalPoint } from './annotationCoordinates';
+import {
+  toDocumentLocalPoint,
+  toDocumentLocalPointFromViewport,
+  toWorkspacePointFromViewport,
+} from './annotationCoordinates';
 import { getCanvasCheckerboardStyle } from './canvasBackgroundStyle';
 import { resetCanvasViewportSnapshot, setCanvasViewportSnapshot, type ViewportMetrics } from './canvasViewportStore';
 import { interpolateViewportTransition } from './canvasZoomMotion';
@@ -34,6 +38,15 @@ import { FloatingLineStyleToolbar } from './FloatingLineStyleToolbar';
 import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
 import { FloatingImageCalloutToolbar } from './FloatingImageCalloutToolbar';
 import { InlineTextEditor } from './InlineTextEditor';
+import {
+  RECT_RESIZE_HANDLES,
+  getRectEdgeHandleFrame,
+  getRectHandleCursor,
+  getRectHandleDragOrigin,
+  getRectHandlePosition,
+  getRectResizePreviewForHandle,
+  type RectResizeHandle,
+} from './rectResizeGeometry';
 import { getNextToolAfterCanvasCreate } from './singleUseCanvasTools';
 
 const DOCUMENT_WIDTH = 960;
@@ -48,6 +61,8 @@ const PADDING = 0;
 const COPY_OFFSET = 24;
 const MAX_PENDING_WHEEL_DELTA = 360;
 const MAX_WHEEL_DELTA_APPLY_PER_FRAME = 84;
+const MIN_RECT_EDIT_WIDTH = 24;
+const MIN_RECT_EDIT_HEIGHT = 24;
 
 interface LineEditPreview {
   annotationId: string;
@@ -63,6 +78,13 @@ interface LineDragPreview {
 interface RectangleEditPreview {
   annotationId: string;
   geometry: RectGeometry;
+}
+
+interface RectResizeDragState {
+  annotationId: string;
+  handle: RectResizeHandle;
+  startGeometry: RectGeometry;
+  startPointer: { x: number; y: number };
 }
 
 type LineMarkerStyle = NonNullable<Annotation['style']['lineStartMarker']>;
@@ -646,6 +668,7 @@ export function AnnotationCanvas({
   const [lineDragPreview, setLineDragPreview] = useState<LineDragPreview | null>(null);
   const [rectangleEditPreview, setRectangleEditPreview] = useState<RectangleEditPreview | null>(null);
   const [lineToolbarReference, setLineToolbarReference] = useState<HTMLDivElement | null>(null);
+  const rectResizeDragStateRef = useRef<RectResizeDragState | null>(null);
   const [calloutColorToolbarReference, setCalloutColorToolbarReference] = useState<HTMLDivElement | null>(null);
   const [hoveredCalloutGroupId, setHoveredCalloutGroupId] = useState<string | null>(null);
   const [isDraggingCalloutGroup, setIsDraggingCalloutGroup] = useState(false);
@@ -805,7 +828,11 @@ export function AnnotationCanvas({
     }
 
     const annotation = draft.annotations.find((item) => item.id === editingRectangleId);
-    return annotation?.tool === 'rectangle' && annotation.geometry.kind === 'rect' ? annotation : null;
+    return annotation &&
+      (annotation.tool === 'rectangle' || annotation.tool === 'highlight') &&
+      annotation.geometry.kind === 'rect'
+      ? annotation
+      : null;
   }, [draft.annotations, editingRectangleId]);
   const editingRectangleGeometry = useMemo<RectGeometry | null>(() => {
     if (!editingRectangleAnnotation) {
@@ -1610,6 +1637,46 @@ export function AnnotationCanvas({
       documentPosition: renderedDocumentPosition,
     });
   };
+  const getPointerFromClient = (clientX: number, clientY: number, restrictToDocument = false) => {
+    const viewport = zoomPreviewRef.current ?? viewportMetricsRef.current ?? committedViewportMetrics;
+
+    if (!viewport.canvasScale) {
+      return null;
+    }
+
+    const logicalPoint = toWorkspacePointFromViewport({
+      framePoint: getFramePosition(clientX, clientY),
+      viewport,
+    });
+
+    if (
+      logicalPoint.x < 0 ||
+      logicalPoint.y < 0 ||
+      logicalPoint.x > WORKSPACE_WIDTH ||
+      logicalPoint.y > WORKSPACE_HEIGHT
+    ) {
+      return null;
+    }
+
+    if (!restrictToDocument) {
+      return logicalPoint;
+    }
+
+    return toDocumentLocalPointFromViewport({
+      framePoint: getFramePosition(clientX, clientY),
+      viewport,
+      documentPosition: renderedDocumentPosition,
+    });
+  };
+  const setCanvasCursor = useCallback((cursor: string) => {
+    const stage = stageRef.current;
+
+    if (!stage) {
+      return;
+    }
+
+    stage.container().style.cursor = cursor;
+  }, []);
 
   const markerCount = draft.annotations.filter((annotation) => annotation.tool === 'marker').length + 1;
 
@@ -2136,6 +2203,16 @@ export function AnnotationCanvas({
       };
     });
   }, [editingRectangleAnnotation, updateAnnotation]);
+  const commitRectGeometry = useCallback((annotationId: string, geometry: RectGeometry) => {
+    updateAnnotation(annotationId, (current) => {
+      if (current.geometry.kind !== 'rect') {
+        return;
+      }
+
+      current.geometry = geometry;
+    });
+    setRectangleEditPreview(null);
+  }, [updateAnnotation]);
   const updateSelectedCalloutColor = useCallback((patch: Partial<Annotation['style']>) => {
     const annotationId = editingCalloutTargetAnnotation?.annotation.id;
 
@@ -2460,6 +2537,204 @@ export function AnnotationCanvas({
       },
       onContextMenu: (event: KonvaEventObject<PointerEvent>) => openAnnotationContextMenu(annotation, event),
     };
+    const renderRectResizeHandles = (annotationId: string, renderedGeometry: RectGeometry) => {
+      const cornerHandleRadius = 6 / Math.max(canvasScale, 0.75);
+      const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
+      const edgeHandleWidth = 18 / Math.max(canvasScale, 0.75);
+      const edgeHandleHeight = 8 / Math.max(canvasScale, 0.75);
+
+      return RECT_RESIZE_HANDLES.map((handle) => {
+        const position = getRectHandlePosition(handle, renderedGeometry);
+        const isEdgeHandle = handle.length === 1;
+
+        return (
+          isEdgeHandle ? (
+            <Rect
+              key={`${annotationId}-${handle}`}
+              {...getRectEdgeHandleFrame(handle as Extract<RectResizeHandle, 'n' | 'e' | 's' | 'w'>, renderedGeometry, edgeHandleWidth, edgeHandleHeight)}
+              cornerRadius={edgeHandleHeight / 2}
+              fill="#ffffff"
+              stroke="#3b82f6"
+              strokeWidth={handleStrokeWidth}
+              draggable
+              onMouseEnter={() => {
+                setCanvasCursor(getRectHandleCursor(handle));
+              }}
+              onMouseLeave={() => {
+                setCanvasCursor('');
+              }}
+              onMouseDown={(event) => {
+                event.cancelBubble = true;
+              }}
+              onTouchStart={(event) => {
+                event.cancelBubble = true;
+              }}
+              onDragStart={(event) => {
+                event.cancelBubble = true;
+                rectResizeDragStateRef.current = {
+                  annotationId,
+                  handle,
+                  startGeometry: renderedGeometry,
+                  startPointer: getRectHandleDragOrigin(handle, renderedGeometry),
+                };
+              }}
+              onDragMove={(event) => {
+                event.cancelBubble = true;
+                const dragState = rectResizeDragStateRef.current;
+
+                if (!dragState || dragState.annotationId !== annotationId || dragState.handle !== handle) {
+                  return;
+                }
+
+                const pointer = getPointerFromClient(event.evt.clientX, event.evt.clientY, true);
+
+                if (!pointer) {
+                  return;
+                }
+
+                const nextGeometry = getRectResizePreviewForHandle({
+                  handle,
+                  startGeometry: dragState.startGeometry,
+                  deltaX: pointer.x - dragState.startPointer.x,
+                  deltaY: pointer.y - dragState.startPointer.y,
+                  minimumWidth: MIN_RECT_EDIT_WIDTH,
+                  minimumHeight: MIN_RECT_EDIT_HEIGHT,
+                });
+
+                setRectangleEditPreview({
+                  annotationId,
+                  geometry: nextGeometry,
+                });
+                event.target.position(getRectHandlePosition(handle, nextGeometry));
+              }}
+              onDragEnd={(event) => {
+                event.cancelBubble = true;
+                const dragState = rectResizeDragStateRef.current;
+                rectResizeDragStateRef.current = null;
+                setCanvasCursor('');
+
+                if (!dragState || dragState.annotationId !== annotationId || dragState.handle !== handle) {
+                  return;
+                }
+
+                const pointer = getPointerFromClient(event.evt.clientX, event.evt.clientY, true);
+
+                if (!pointer) {
+                  return;
+                }
+
+                const nextGeometry = getRectResizePreviewForHandle({
+                  handle,
+                  startGeometry: dragState.startGeometry,
+                  deltaX: pointer.x - dragState.startPointer.x,
+                  deltaY: pointer.y - dragState.startPointer.y,
+                  minimumWidth: MIN_RECT_EDIT_WIDTH,
+                  minimumHeight: MIN_RECT_EDIT_HEIGHT,
+                });
+
+                event.target.position(getRectHandlePosition(handle, nextGeometry));
+                commitRectGeometry(
+                  annotationId,
+                  nextGeometry,
+                );
+              }}
+            />
+          ) : (
+            <Circle
+              key={`${annotationId}-${handle}`}
+              x={position.x}
+              y={position.y}
+              radius={cornerHandleRadius}
+              fill="#ffffff"
+              stroke="#3b82f6"
+              strokeWidth={handleStrokeWidth}
+              draggable
+              onMouseEnter={() => {
+                setCanvasCursor(getRectHandleCursor(handle));
+              }}
+              onMouseLeave={() => {
+                setCanvasCursor('');
+              }}
+              onMouseDown={(event) => {
+                event.cancelBubble = true;
+              }}
+              onTouchStart={(event) => {
+                event.cancelBubble = true;
+              }}
+              onDragStart={(event) => {
+                event.cancelBubble = true;
+                rectResizeDragStateRef.current = {
+                  annotationId,
+                  handle,
+                  startGeometry: renderedGeometry,
+                  startPointer: getRectHandleDragOrigin(handle, renderedGeometry),
+                };
+              }}
+              onDragMove={(event) => {
+                event.cancelBubble = true;
+                const dragState = rectResizeDragStateRef.current;
+
+                if (!dragState || dragState.annotationId !== annotationId || dragState.handle !== handle) {
+                  return;
+                }
+
+                const pointer = getPointerFromClient(event.evt.clientX, event.evt.clientY, true);
+
+                if (!pointer) {
+                  return;
+                }
+
+                const nextGeometry = getRectResizePreviewForHandle({
+                  handle,
+                  startGeometry: dragState.startGeometry,
+                  deltaX: pointer.x - dragState.startPointer.x,
+                  deltaY: pointer.y - dragState.startPointer.y,
+                  minimumWidth: MIN_RECT_EDIT_WIDTH,
+                  minimumHeight: MIN_RECT_EDIT_HEIGHT,
+                });
+
+                setRectangleEditPreview({
+                  annotationId,
+                  geometry: nextGeometry,
+                });
+                event.target.position(getRectHandlePosition(handle, nextGeometry));
+              }}
+              onDragEnd={(event) => {
+                event.cancelBubble = true;
+                const dragState = rectResizeDragStateRef.current;
+                rectResizeDragStateRef.current = null;
+                setCanvasCursor('');
+
+                if (!dragState || dragState.annotationId !== annotationId || dragState.handle !== handle) {
+                  return;
+                }
+
+                const pointer = getPointerFromClient(event.evt.clientX, event.evt.clientY, true);
+
+                if (!pointer) {
+                  return;
+                }
+
+                const nextGeometry = getRectResizePreviewForHandle({
+                  handle,
+                  startGeometry: dragState.startGeometry,
+                  deltaX: pointer.x - dragState.startPointer.x,
+                  deltaY: pointer.y - dragState.startPointer.y,
+                  minimumWidth: MIN_RECT_EDIT_WIDTH,
+                  minimumHeight: MIN_RECT_EDIT_HEIGHT,
+                });
+
+                event.target.position(getRectHandlePosition(handle, nextGeometry));
+                commitRectGeometry(
+                  annotationId,
+                  nextGeometry,
+                );
+              }}
+            />
+          )
+        );
+      });
+    };
 
     switch (annotation.tool) {
       case 'rectangle': {
@@ -2493,7 +2768,7 @@ export function AnnotationCanvas({
               setRectangleEditPreview({
                 annotationId: annotation.id,
                 geometry: {
-                  ...geometry,
+                  ...renderedRectangleGeometry,
                   x: pos.x - renderedDocumentPosition.x,
                   y: pos.y - renderedDocumentPosition.y,
                 },
@@ -2501,16 +2776,11 @@ export function AnnotationCanvas({
             }}
             onDragEnd={(event) => {
               const pos = event.target.position();
-              updateAnnotation(annotation.id, (current) => {
-                if (current.geometry.kind === 'rect') {
-                  current.geometry = {
-                    ...current.geometry,
-                    x: pos.x - renderedDocumentPosition.x,
-                    y: pos.y - renderedDocumentPosition.y,
-                  };
-                }
+              commitRectGeometry(annotation.id, {
+                ...renderedRectangleGeometry,
+                x: pos.x - renderedDocumentPosition.x,
+                y: pos.y - renderedDocumentPosition.y,
               });
-              setRectangleEditPreview(null);
             }}
           >
             {isEditingRectangle ? (
@@ -2533,6 +2803,7 @@ export function AnnotationCanvas({
               dash={rectangleDash}
               cornerRadius={8}
             />
+            {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry) : null}
           </Group>
         );
       }
@@ -2543,35 +2814,65 @@ export function AnnotationCanvas({
           return null;
         }
 
+        const isEditingRectangle =
+          annotation.tool === 'highlight' && !readOnly && !isPreview && editingRectangleId === annotation.id;
+        const renderedRectangleGeometry =
+          rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
+
         return (
           <Group
             key={annotation.id}
-            x={renderedDocumentPosition.x + geometry.x}
-            y={renderedDocumentPosition.y + geometry.y}
+            x={renderedDocumentPosition.x + renderedRectangleGeometry.x}
+            y={renderedDocumentPosition.y + renderedRectangleGeometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
             {...commonProps}
+            onDblClick={annotation.tool === 'highlight' ? () => startRectangleEditing(annotation.id) : undefined}
+            onDblTap={annotation.tool === 'highlight' ? () => startRectangleEditing(annotation.id) : undefined}
+            onDragMove={(event) => {
+              if (!isEditingRectangle) {
+                return;
+              }
+
+              const pos = event.target.position();
+              setRectangleEditPreview({
+                annotationId: annotation.id,
+                geometry: {
+                  ...renderedRectangleGeometry,
+                  x: pos.x - renderedDocumentPosition.x,
+                  y: pos.y - renderedDocumentPosition.y,
+                },
+              });
+            }}
             onDragEnd={(event) => {
               const pos = event.target.position();
-              updateAnnotation(annotation.id, (current) => {
-                if (current.geometry.kind === 'rect') {
-                  current.geometry = {
-                    ...current.geometry,
-                    x: pos.x - renderedDocumentPosition.x,
-                    y: pos.y - renderedDocumentPosition.y,
-                  };
-                }
+              commitRectGeometry(annotation.id, {
+                ...renderedRectangleGeometry,
+                x: pos.x - renderedDocumentPosition.x,
+                y: pos.y - renderedDocumentPosition.y,
               });
             }}
           >
+            {isEditingRectangle ? (
+              <Rect
+                width={renderedRectangleGeometry.width}
+                height={renderedRectangleGeometry.height}
+                stroke="#60a5fa"
+                strokeWidth={(annotation.style.strokeWidth ?? 2) + 4 / Math.max(canvasScale, 0.75)}
+                opacity={0.22}
+                cornerRadius={8}
+                listening={false}
+              />
+            ) : null}
             <Rect
-              width={geometry.width}
-              height={geometry.height}
+              width={renderedRectangleGeometry.width}
+              height={renderedRectangleGeometry.height}
               stroke={annotation.style.stroke}
               strokeWidth={annotation.style.strokeWidth ?? 2}
               fill={annotation.style.fill}
-              dash={selected ? [8, 6] : undefined}
+              dash={selected && !isEditingRectangle ? [8, 6] : undefined}
               cornerRadius={8}
             />
+            {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry) : null}
           </Group>
         );
       }
@@ -3570,7 +3871,8 @@ export function AnnotationCanvas({
           />
         ) : null}
 
-        {(lineToolbarRect && editingLineAnnotation) || (rectangleToolbarRect && editingRectangleAnnotation) ? (
+        {(lineToolbarRect && editingLineAnnotation) ||
+        (rectangleToolbarRect && editingRectangleAnnotation?.tool === 'rectangle') ? (
           <>
             <div
               ref={setLineToolbarReference}

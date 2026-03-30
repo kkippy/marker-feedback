@@ -25,7 +25,7 @@ export function FloatingLineStyleToolbar({
     strategy: 'fixed',
     whileElementsMounted: autoUpdate,
     middleware: [
-      offset(10),
+      offset(18),
       flip({
         fallbackPlacements: ['bottom'],
       }),
