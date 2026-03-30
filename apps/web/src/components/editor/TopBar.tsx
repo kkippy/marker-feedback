@@ -156,16 +156,16 @@ export function TopBar(props: {
             {props.discussionPanel}
           </DiscussionPanel>
         ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {props.secondaryActions}
 
         {props.activeTool ? (
           <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600">
             {messages.topBar.currentMode(messages.tools.labels[props.activeTool])}
           </span>
         ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {props.secondaryActions}
 
         <ToolbarIconButton
           label={messages.topBar.zoomOutAriaLabel}

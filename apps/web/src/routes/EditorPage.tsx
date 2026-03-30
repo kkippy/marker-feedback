@@ -5,7 +5,6 @@ import { FolderOpen, ImageUp, Redo2, Undo2 } from 'lucide-react';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
 import { CommentSidebar } from '@/components/editor/CommentSidebar';
 import { TopBar } from '@/components/editor/TopBar';
-import { ToolPalette } from '@/components/editor/ToolPalette';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
@@ -115,7 +114,6 @@ export function EditorPage() {
           secondaryActions={
             draft.asset ? (
               <>
-                <ToolPalette activeTool={activeTool} onToolChange={setActiveTool} />
                 <ToolbarIconButton
                   label={messages.editor.undo}
                   className="bg-slate-100 text-slate-700 hover:bg-slate-200"

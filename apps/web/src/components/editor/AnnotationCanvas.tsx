@@ -34,6 +34,7 @@ import { FloatingLineStyleToolbar } from './FloatingLineStyleToolbar';
 import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
 import { FloatingImageCalloutToolbar } from './FloatingImageCalloutToolbar';
 import { InlineTextEditor } from './InlineTextEditor';
+import { getNextToolAfterCanvasCreate } from './singleUseCanvasTools';
 
 const DOCUMENT_WIDTH = 960;
 const DOCUMENT_HEIGHT = 560;
@@ -1967,6 +1968,7 @@ export function AnnotationCanvas({
       addAnnotation(
         buildAnnotation('marker', { kind: 'marker', x: pointer.x, y: pointer.y }, draft.asset.id, markerCount),
       );
+      setActiveTool(getNextToolAfterCanvasCreate(activeTool));
       return;
     }
 
@@ -2373,6 +2375,7 @@ export function AnnotationCanvas({
         });
       } else {
         addAnnotation(preview);
+        setActiveTool(getNextToolAfterCanvasCreate(preview.tool));
       }
     }
 
