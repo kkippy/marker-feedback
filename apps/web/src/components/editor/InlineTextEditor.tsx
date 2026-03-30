@@ -10,19 +10,31 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { AnnotationStyle } from '@marker/shared';
+import {
+  BASE_TEXT_LINE_HEIGHT,
+  TEXT_FRAME_HORIZONTAL_PADDING,
+  TEXT_FRAME_VERTICAL_PADDING,
+  getMinTextBoxHeight,
+} from '@/lib/textFrameLayout';
 import { FloatingTextStyleToolbar } from './FloatingTextStyleToolbar';
 import type { ViewportMetrics } from './canvasViewportStore';
 import { useCanvasViewportSnapshot } from './canvasViewportStore';
 import { getInlineTextOverlayStyle } from './inlineTextOverlay';
+import {
+  RECT_RESIZE_HANDLES,
+  getRectEdgeHandleFrame,
+  getRectHandleCursor,
+  getRectHandlePosition,
+} from './rectResizeGeometry';
 import { getResizePreviewForHandle, type ResizeHandle, type TextFrame } from './textResizeScaling';
 
-const BASE_LINE_HEIGHT = 1.45;
 const MIN_TEXT_WIDTH = 20;
 const MAX_TEXT_WIDTH = 320;
 const MIN_RESIZE_FONT_SIZE = 12;
 const MAX_RESIZE_FONT_SIZE = 120;
-const RESIZE_HANDLE_OFFSET = -5;
-const RESIZE_HANDLE_SIZE = 10;
+const CORNER_HANDLE_SIZE = 12;
+const EDGE_HANDLE_WIDTH = 18;
+const EDGE_HANDLE_HEIGHT = 8;
 const FRAME_DRAG_THICKNESS = 8;
 const FRAME_SEGMENT_INSET = 18;
 const DEFAULT_MIN_TEXT_HEIGHT = 24;
@@ -151,12 +163,27 @@ export function InlineTextEditor({
     viewport.scrollTop,
   ]);
   const scaledFontSize = useMemo(() => displayFontSize * canvasScale, [canvasScale, displayFontSize]);
-  const scaledLineHeight = useMemo(() => displayFontSize * BASE_LINE_HEIGHT * canvasScale, [canvasScale, displayFontSize]);
-  const minTextHeight = useMemo(() => Math.ceil(displayFontSize * BASE_LINE_HEIGHT), [displayFontSize]);
+  const scaledLineHeight = useMemo(
+    () => displayFontSize * BASE_TEXT_LINE_HEIGHT * canvasScale,
+    [canvasScale, displayFontSize],
+  );
+  const minTextHeight = useMemo(() => getMinTextBoxHeight(displayFontSize), [displayFontSize]);
 
   const updateResizePreview = useCallback((nextPreview: ResizePreviewState | null) => {
     resizePreviewRef.current = nextPreview;
     setResizePreview(nextPreview);
+  }, []);
+
+  const focusTextareaAtEnd = useCallback(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.focus();
+    const selectionStart = textarea.value.length;
+    textarea.setSelectionRange(selectionStart, selectionStart);
   }, []);
 
   const handleEditorBoxRef = useCallback((node: HTMLDivElement | null) => {
@@ -164,16 +191,12 @@ export function InlineTextEditor({
   }, []);
 
   useLayoutEffect(() => {
-    const textarea = textareaRef.current;
-
-    if (!isOpen || !textarea) {
+    if (!isOpen) {
       return;
     }
 
-    textarea.focus();
-    const selectionStart = textarea.value.length;
-    textarea.setSelectionRange(selectionStart, selectionStart);
-  }, [isOpen]);
+    focusTextareaAtEnd();
+  }, [focusTextareaAtEnd, isOpen]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -202,7 +225,7 @@ export function InlineTextEditor({
     const maxWidthPx = MAX_TEXT_WIDTH * canvasScale;
     const nextWidthPx =
       textBoxMode === 'auto'
-        ? clamp(longestLineWidth + 6, minWidthPx, maxWidthPx)
+        ? clamp(longestLineWidth + TEXT_FRAME_HORIZONTAL_PADDING * 2 + 6, minWidthPx, maxWidthPx)
         : Math.max(currentWidthPx, minWidthPx);
 
     textarea.style.width = `${nextWidthPx}px`;
@@ -287,7 +310,11 @@ export function InlineTextEditor({
 
     interactionStateRef.current = null;
     updateResizePreview(null);
-  }, [onFrameChange, updateResizePreview]);
+
+    if (interactionState) {
+      focusTextareaAtEnd();
+    }
+  }, [focusTextareaAtEnd, onFrameChange, updateResizePreview]);
 
   useEffect(() => {
     window.addEventListener('pointermove', handlePointerMove);
@@ -316,6 +343,11 @@ export function InlineTextEditor({
 
       if (document.activeElement === textarea) {
         textarea.blur();
+        return;
+      }
+
+      if (document.activeElement instanceof Node && editor.contains(document.activeElement)) {
+        onCommit();
       }
     };
 
@@ -324,7 +356,7 @@ export function InlineTextEditor({
     return () => {
       document.removeEventListener('pointerdown', handlePointerDownCapture, true);
     };
-  }, []);
+  }, [onCommit]);
 
   const startResize = (handle: ResizeHandle) => (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -405,8 +437,12 @@ export function InlineTextEditor({
               lineHeight: `${scaledLineHeight}px`,
               textDecoration,
               backgroundColor: textBackgroundColor === 'transparent' ? 'transparent' : textBackgroundColor,
+              padding: `${TEXT_FRAME_VERTICAL_PADDING * canvasScale}px ${TEXT_FRAME_HORIZONTAL_PADDING * canvasScale}px`,
+              boxSizing: 'border-box',
+              borderStyle: 'solid',
+              borderRadius: `${8 * canvasScale}px`,
             }}
-            className="resize-none overflow-hidden rounded-sm border border-dashed border-blue-500/80 bg-transparent p-0 caret-blue-600 shadow-none outline-none"
+            className="resize-none overflow-hidden rounded-lg border border-solid border-blue-500/80 bg-transparent caret-blue-600 shadow-none outline-none"
             onChange={(event) => onChange(event.target.value)}
             onBlur={handleTextareaBlur}
             onKeyDown={(event) => {
@@ -430,6 +466,7 @@ export function InlineTextEditor({
           <button
             type="button"
             aria-label="Move text box top border"
+            tabIndex={-1}
             className="absolute cursor-move bg-transparent"
             style={{
               left: FRAME_SEGMENT_INSET,
@@ -443,6 +480,7 @@ export function InlineTextEditor({
           <button
             type="button"
             aria-label="Move text box bottom border"
+            tabIndex={-1}
             className="absolute cursor-move bg-transparent"
             style={{
               left: FRAME_SEGMENT_INSET,
@@ -456,6 +494,7 @@ export function InlineTextEditor({
           <button
             type="button"
             aria-label="Move text box left border"
+            tabIndex={-1}
             className="absolute cursor-move bg-transparent"
             style={{
               left: -FRAME_DRAG_THICKNESS / 2,
@@ -469,6 +508,7 @@ export function InlineTextEditor({
           <button
             type="button"
             aria-label="Move text box right border"
+            tabIndex={-1}
             className="absolute cursor-move bg-transparent"
             style={{
               right: -FRAME_DRAG_THICKNESS / 2,
@@ -480,50 +520,41 @@ export function InlineTextEditor({
             onPointerDown={startMove}
           />
 
-          {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const).map((handle) => (
-            <button
-              key={handle}
-              type="button"
-              aria-label={`Resize text box ${handle}`}
-              className={`
-                absolute rounded-full border border-blue-500 bg-white shadow-sm
-                ${handle === 'nw' ? 'cursor-nwse-resize' : ''}
-                ${handle === 'n' ? 'cursor-ns-resize' : ''}
-                ${handle === 'ne' ? 'cursor-nesw-resize' : ''}
-                ${handle === 'e' ? 'cursor-ew-resize' : ''}
-                ${handle === 's' ? 'cursor-ns-resize' : ''}
-                ${handle === 'sw' ? 'cursor-nesw-resize' : ''}
-                ${handle === 'w' ? 'cursor-ew-resize' : ''}
-                ${handle === 'se' ? 'cursor-nwse-resize' : ''}
-              `}
-              style={{
-                width: RESIZE_HANDLE_SIZE,
-                height: RESIZE_HANDLE_SIZE,
-                left:
-                  handle === 'nw' || handle === 'w' || handle === 'sw'
-                    ? RESIZE_HANDLE_OFFSET
-                    : handle === 'n' || handle === 's'
-                      ? `calc(50% - ${RESIZE_HANDLE_SIZE / 2}px)`
-                      : undefined,
-                right:
-                  handle === 'ne' || handle === 'e' || handle === 'se'
-                    ? RESIZE_HANDLE_OFFSET
-                    : undefined,
-                top:
-                  handle === 'nw' || handle === 'n' || handle === 'ne'
-                    ? RESIZE_HANDLE_OFFSET
-                    : handle === 'e' || handle === 'w'
-                      ? `calc(50% - ${RESIZE_HANDLE_SIZE / 2}px)`
-                      : undefined,
-                bottom:
-                  handle === 'sw' || handle === 's' || handle === 'se'
-                    ? RESIZE_HANDLE_OFFSET
-                    : undefined,
-              }}
-              onMouseDown={(event) => event.preventDefault()}
-              onPointerDown={startResize(handle)}
-            />
-          ))}
+          {RECT_RESIZE_HANDLES.map((handle) => {
+            const isEdgeHandle = handle.length === 1;
+            const edgeFrame = isEdgeHandle
+              ? getRectEdgeHandleFrame(
+                  handle as Extract<ResizeHandle, 'n' | 'e' | 's' | 'w'>,
+                  displayFrame,
+                  EDGE_HANDLE_WIDTH,
+                  EDGE_HANDLE_HEIGHT,
+                )
+              : null;
+            const cornerPosition = !isEdgeHandle ? getRectHandlePosition(handle, displayFrame) : null;
+
+            return (
+              <button
+                key={handle}
+                type="button"
+                aria-label={`Resize text box ${handle}`}
+                tabIndex={-1}
+                className="absolute appearance-none border border-blue-500 bg-white p-0 shadow-sm"
+                style={{
+                  width: isEdgeHandle ? edgeFrame?.width : CORNER_HANDLE_SIZE,
+                  height: isEdgeHandle ? edgeFrame?.height : CORNER_HANDLE_SIZE,
+                  left: isEdgeHandle ? edgeFrame?.x : cornerPosition?.x,
+                  top: isEdgeHandle ? edgeFrame?.y : cornerPosition?.y,
+                  transform: isEdgeHandle
+                    ? `translate(-${edgeFrame?.offsetX}px, -${edgeFrame?.offsetY}px)`
+                    : 'translate(-50%, -50%)',
+                  borderRadius: isEdgeHandle ? EDGE_HANDLE_HEIGHT / 2 : CORNER_HANDLE_SIZE / 2,
+                  cursor: getRectHandleCursor(handle),
+                }}
+                onMouseDown={(event) => event.preventDefault()}
+                onPointerDown={startResize(handle)}
+              />
+            );
+          })}
         </div>
       </div>
 

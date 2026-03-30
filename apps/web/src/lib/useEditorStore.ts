@@ -14,20 +14,22 @@ import {
   type TextGeometry,
   type ThreadStatus,
 } from '@marker/shared';
+import { getMinTextBoxHeight } from './textFrameLayout';
 
 const cloneDraft = (draft: EditorDraft): EditorDraft => JSON.parse(JSON.stringify(draft));
 const now = () => new Date().toISOString();
 const MAX_ZOOM = 6;
 const BUTTON_ZOOM_FACTOR = 1.15;
-const DEFAULT_TEXT_WIDTH = 32;
-const DEFAULT_TEXT_HEIGHT = 24;
+const DEFAULT_TEXT_FONT_SIZE = 14;
+const DEFAULT_TEXT_WIDTH = 120;
+const DEFAULT_TEXT_HEIGHT = getMinTextBoxHeight(DEFAULT_TEXT_FONT_SIZE);
 
 export const DEFAULT_TEXT_STYLE: AnnotationStyle = {
   stroke: '#2563eb',
   fill: 'rgba(255,255,255,0)',
   strokeWidth: 2,
   textColor: '#0f172a',
-  fontSize: 14,
+  fontSize: DEFAULT_TEXT_FONT_SIZE,
   fontWeight: 'normal',
   fontStyle: 'normal',
   textDecoration: 'none',
@@ -147,6 +149,7 @@ export const startInlineTextCreateState = (
     style: {
       ...state.textStylePreset,
       textBackgroundColor: DEFAULT_TEXT_STYLE.textBackgroundColor,
+      textBoxMode: 'manual',
     },
     calloutTarget: null,
   },

@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useLocale } from '@/lib/locale';
 import { useLoadedImage } from '@/lib/useLoadedImage';
+import { BASE_TEXT_LINE_HEIGHT, getTextContentFrame } from '@/lib/textFrameLayout';
 import { DEFAULT_TEXT_STYLE, useEditorStore } from '@/lib/useEditorStore';
 import {
   toDocumentLocalPoint,
@@ -3141,6 +3142,7 @@ export function AnnotationCanvas({
         const isEditingCurrentText = inlineTextEditor?.annotationId === annotation.id;
         const isHoveredCurrentText = hoveredTextAnnotationId === annotation.id;
         const textBackgroundColor = annotation.style.textBackgroundColor ?? DEFAULT_TEXT_STYLE.textBackgroundColor;
+        const textContentFrame = getTextContentFrame(geometry);
 
         return (
           <Group
@@ -3199,13 +3201,16 @@ export function AnnotationCanvas({
             />
             {isEditingCurrentText ? null : (
               <Text
+                x={textContentFrame.x}
+                y={textContentFrame.y}
                 text={annotation.label ?? ''}
-                width={geometry.width}
+                width={textContentFrame.width}
+                height={textContentFrame.height}
                 fill={annotation.style.textColor ?? DEFAULT_TEXT_STYLE.textColor}
                 fontSize={annotation.style.fontSize ?? DEFAULT_TEXT_STYLE.fontSize}
                 fontStyle={getTextFontStyle(annotation.style)}
                 textDecoration={annotation.style.textDecoration ?? DEFAULT_TEXT_STYLE.textDecoration}
-                lineHeight={1.45}
+                lineHeight={BASE_TEXT_LINE_HEIGHT}
               />
             )}
           </Group>
