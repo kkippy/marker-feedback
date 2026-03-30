@@ -120,6 +120,10 @@ export function InlineTextEditor({
   const displayFrame = resizePreview?.frame ?? frame;
   const canvasScale = viewport.canvasScale;
   const textBoxMode = resizePreview ? 'manual' : (textStyle.textBoxMode ?? 'auto');
+  const toolbarTextStyle = useMemo(
+    () => (resizePreview ? { ...textStyle, fontSize: displayFontSize } : textStyle),
+    [displayFontSize, resizePreview, textStyle],
+  );
   const displayStyle = useMemo(() => {
     const baseStyle = getInlineTextOverlayStyle({
       annotationGeometry: {
@@ -404,7 +408,7 @@ export function InlineTextEditor({
         <FloatingTextStyleToolbar
           isOpen={isOpen}
           reference={referenceElement}
-          style={textStyle}
+          style={toolbarTextStyle}
           onChange={onTextStyleChange}
           onCommit={onCommit}
         />

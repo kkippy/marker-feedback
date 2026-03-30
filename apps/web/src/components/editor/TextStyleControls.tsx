@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import type { AnnotationStyle } from '@marker/shared';
 import { Bold, Italic, Pipette, Type, Underline } from 'lucide-react';
 import { HexColorInput, HexColorPicker } from 'react-colorful';
@@ -37,12 +45,17 @@ export function TextStyleControls({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const fontSize = style.fontSize ?? 14;
+  const fontSizeOptions = useMemo(
+    () => Array.from(new Set([...FONT_SIZE_OPTIONS, fontSize])).sort((left, right) => left - right),
+    [fontSize],
+  );
   const fontWeight = style.fontWeight ?? 'normal';
   const fontStyle = style.fontStyle ?? 'normal';
   const textDecoration = style.textDecoration ?? 'none';
   const textColor = style.textColor ?? '#0f172a';
   const textBackgroundColor = style.textBackgroundColor ?? 'transparent';
   const normalizedTextColor = useMemo(() => normalizeHexColor(textColor), [textColor]);
+  const formatFontSizeLabel = useCallback((value: number) => `${Number(value.toFixed(2)).toString()}px`, []);
   const createPressHandlers = (callback: () => void) => ({
     onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
@@ -72,17 +85,17 @@ export function TextStyleControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1.5">
-      <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm text-slate-600">
+      <div className="flex min-w-[94px] items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm text-slate-600">
         <Type className="size-4 text-slate-500" />
         <select
           aria-label="Text size"
-          className="bg-transparent text-sm font-medium text-slate-700 outline-none"
+          className="w-[72px] flex-none bg-transparent text-sm font-medium tabular-nums text-slate-700 outline-none"
           value={fontSize}
           onChange={(event) => onChange({ fontSize: Number(event.target.value) })}
         >
-          {FONT_SIZE_OPTIONS.map((option) => (
+          {fontSizeOptions.map((option) => (
             <option key={option} value={option}>
-              {option}px
+              {formatFontSizeLabel(option)}
             </option>
           ))}
         </select>

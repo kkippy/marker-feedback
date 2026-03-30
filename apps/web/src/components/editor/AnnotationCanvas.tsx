@@ -1504,6 +1504,55 @@ export function AnnotationCanvas({
     }
   }, [clearZoomPreviewCommitTimeout, stopZoomAnimation]);
 
+  const deleteAnnotationById = useCallback((annotationId: string) => {
+    commitDraft((nextDraft) => {
+      nextDraft.annotations = nextDraft.annotations.filter((item) => item.id !== annotationId);
+      const usedAssetIds = new Set(
+        nextDraft.annotations
+          .map((item) => item.imageAssetId)
+          .filter((assetId): assetId is string => Boolean(assetId)),
+      );
+      nextDraft.embeddedAssets = nextDraft.embeddedAssets.filter((asset) => usedAssetIds.has(asset.id));
+    });
+
+    if (annotationId === editingLineId) {
+      setEditingLineId(null);
+      setLineEditPreview(null);
+      setLineDragPreview(null);
+    }
+
+    if (annotationId === editingRectangleId) {
+      setEditingRectangleId(null);
+      setRectangleEditPreview(null);
+    }
+
+    if (annotationId === editingCalloutTargetId) {
+      setEditingCalloutTargetId(null);
+    }
+
+    if (annotationId === editingImageCalloutPanelId) {
+      setEditingImageCalloutPanelId(null);
+    }
+
+    if (inlineTextEditor?.annotationId === annotationId) {
+      cancelInlineTextEditor();
+    }
+
+    if (selectedAnnotationId === annotationId) {
+      setSelectedAnnotation(null);
+    }
+  }, [
+    cancelInlineTextEditor,
+    commitDraft,
+    editingCalloutTargetId,
+    editingImageCalloutPanelId,
+    editingLineId,
+    editingRectangleId,
+    inlineTextEditor,
+    selectedAnnotationId,
+    setSelectedAnnotation,
+  ]);
+
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) =>
       target instanceof HTMLElement &&
@@ -1513,7 +1562,27 @@ export function AnnotationCanvas({
         target.isContentEditable);
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || isEditableTarget(event.target)) {
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        (event.key === 'Delete' || event.key === 'Backspace')
+      ) {
+        if (!selectedAnnotationId) {
+          return;
+        }
+
+        event.preventDefault();
+        closeContextMenu();
+        deleteAnnotationById(selectedAnnotationId);
+        return;
+      }
+
+      if (event.code !== 'Space') {
         return;
       }
 
@@ -1579,7 +1648,7 @@ export function AnnotationCanvas({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', stopPanning);
     };
-  }, [clampScrollPosition, committedViewportMetrics]);
+  }, [clampScrollPosition, closeContextMenu, committedViewportMetrics, deleteAnnotationById, selectedAnnotationId]);
 
   useEffect(() => {
     onExportReady?.(() =>
@@ -2323,16 +2392,7 @@ export function AnnotationCanvas({
         closeContextMenu();
         return;
       case 'delete':
-        commitDraft((nextDraft) => {
-          nextDraft.annotations = nextDraft.annotations.filter((item) => item.id !== annotation.id);
-          const usedAssetIds = new Set(
-            nextDraft.annotations
-              .map((item) => item.imageAssetId)
-              .filter((assetId): assetId is string => Boolean(assetId)),
-          );
-          nextDraft.embeddedAssets = nextDraft.embeddedAssets.filter((asset) => usedAssetIds.has(asset.id));
-        });
-        setSelectedAnnotation(null);
+        deleteAnnotationById(annotation.id);
         closeContextMenu();
         return;
       case 'bring-to-front':
@@ -2393,21 +2453,8 @@ export function AnnotationCanvas({
       return;
     }
 
-    commitDraft((nextDraft) => {
-      nextDraft.annotations = nextDraft.annotations.filter(
-        (item) => item.id !== selectedImageCallout.annotation.id,
-      );
-      const usedAssetIds = new Set(
-        nextDraft.annotations
-          .map((item) => item.imageAssetId)
-          .filter((assetId): assetId is string => Boolean(assetId)),
-      );
-      nextDraft.embeddedAssets = nextDraft.embeddedAssets.filter((asset) =>
-        usedAssetIds.has(asset.id),
-      );
-    });
-    setSelectedAnnotation(null);
-  }, [commitDraft, selectedImageCallout, setSelectedAnnotation]);
+    deleteAnnotationById(selectedImageCallout.annotation.id);
+  }, [deleteAnnotationById, selectedImageCallout]);
 
   const setViewportCenter = (nextZoom: number) => {
     const viewport = viewportRef.current;

@@ -48,7 +48,11 @@ export function FloatingTextStyleToolbar({
   return (
     <div ref={refs.setFloating} style={floatingStyles} className="pointer-events-auto z-50">
       <div className="rounded-[1.25rem] border border-slate-200 bg-white/96 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur">
-        <TextStyleControls style={style} onChange={onChange} onCommit={onCommit} />
+        <TextStyleControls
+          style={style}
+          onChange={onChange}
+          onCommit={onCommit}
+        />
       </div>
     </div>
   );
