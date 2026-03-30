@@ -662,11 +662,16 @@ export function AnnotationCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [hoveredTextAnnotationId, setHoveredTextAnnotationId] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editingArrowId, setEditingArrowId] = useState<string | null>(null);
   const [editingRectangleId, setEditingRectangleId] = useState<string | null>(null);
   const [editingCalloutTargetId, setEditingCalloutTargetId] = useState<string | null>(null);
   const [editingImageCalloutPanelId, setEditingImageCalloutPanelId] = useState<string | null>(null);
   const [lineEditPreview, setLineEditPreview] = useState<LineEditPreview | null>(null);
   const [lineDragPreview, setLineDragPreview] = useState<LineDragPreview | null>(null);
+  const [draggingLineHandleId, setDraggingLineHandleId] = useState<string | null>(null);
+  const [arrowEditPreview, setArrowEditPreview] = useState<LineEditPreview | null>(null);
+  const [arrowDragPreview, setArrowDragPreview] = useState<LineDragPreview | null>(null);
+  const [draggingArrowHandleId, setDraggingArrowHandleId] = useState<string | null>(null);
   const [rectangleEditPreview, setRectangleEditPreview] = useState<RectangleEditPreview | null>(null);
   const [lineToolbarReference, setLineToolbarReference] = useState<HTMLDivElement | null>(null);
   const rectResizeDragStateRef = useRef<RectResizeDragState | null>(null);
@@ -823,6 +828,36 @@ export function AnnotationCanvas({
         : { x: 0, y: 0 },
     [editingLineId, lineDragPreview],
   );
+  const editingArrowAnnotation = useMemo(() => {
+    if (!editingArrowId) {
+      return null;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === editingArrowId);
+    return annotation?.tool === 'arrow' && annotation.geometry.kind === 'arrow' ? annotation : null;
+  }, [draft.annotations, editingArrowId]);
+  const editingArrowPoints = useMemo(() => {
+    if (!editingArrowAnnotation) {
+      return null;
+    }
+
+    const geometry = editingArrowAnnotation.geometry;
+
+    if (geometry.kind !== 'arrow') {
+      return null;
+    }
+
+    return arrowEditPreview?.annotationId === editingArrowAnnotation.id
+      ? arrowEditPreview.points
+      : geometry.points;
+  }, [arrowEditPreview, editingArrowAnnotation]);
+  const editingArrowOffset = useMemo(
+    () =>
+      arrowDragPreview?.annotationId === editingArrowId
+        ? { x: arrowDragPreview.dx, y: arrowDragPreview.dy }
+        : { x: 0, y: 0 },
+    [arrowDragPreview, editingArrowId],
+  );
   const editingRectangleAnnotation = useMemo(() => {
     if (!editingRectangleId) {
       return null;
@@ -875,6 +910,38 @@ export function AnnotationCanvas({
     editingLineOffset.x,
     editingLineOffset.y,
     editingLinePoints,
+    layerOffsetX,
+    layerOffsetY,
+    readOnly,
+    renderedDocumentPosition.x,
+    renderedDocumentPosition.y,
+    scrollPosition.left,
+    scrollPosition.top,
+  ]);
+  const arrowToolbarRect = useMemo(() => {
+    if (!editingArrowPoints || readOnly) {
+      return null;
+    }
+
+    const bounds = getLineBounds(editingArrowPoints);
+
+    return {
+      left:
+        layerOffsetX -
+        scrollPosition.left +
+        (renderedDocumentPosition.x + editingArrowOffset.x + bounds.x) * canvasScale,
+      top:
+        layerOffsetY -
+        scrollPosition.top +
+        (renderedDocumentPosition.y + editingArrowOffset.y + bounds.y) * canvasScale,
+      width: bounds.width * canvasScale,
+      height: bounds.height * canvasScale,
+    };
+  }, [
+    canvasScale,
+    editingArrowOffset.x,
+    editingArrowOffset.y,
+    editingArrowPoints,
     layerOffsetX,
     layerOffsetY,
     readOnly,
@@ -1298,6 +1365,7 @@ export function AnnotationCanvas({
     setEditingImageCalloutPanelId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
+    setDraggingLineHandleId(null);
     setRectangleEditPreview(null);
     zoomPreviewRef.current = null;
     clearZoomPreviewCommitTimeout();
@@ -1307,6 +1375,10 @@ export function AnnotationCanvas({
     setDraggingCalloutTargetFrame(null);
     setDraggingCalloutTextFrame(null);
     setDraggingImageCalloutPanelFrame(null);
+    setEditingArrowId(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
     setPendingImageCalloutGeometry(null);
     imageCalloutDialogStateRef.current = {
       mode: null,
@@ -1325,8 +1397,22 @@ export function AnnotationCanvas({
       setEditingLineId(null);
       setLineEditPreview(null);
       setLineDragPreview(null);
+      setDraggingLineHandleId(null);
     }
   }, [editingLineAnnotation, editingLineId, selectedAnnotationId]);
+
+  useEffect(() => {
+    if (!editingArrowId) {
+      return;
+    }
+
+    if (selectedAnnotationId !== editingArrowId || !editingArrowAnnotation) {
+      setEditingArrowId(null);
+      setArrowEditPreview(null);
+      setArrowDragPreview(null);
+      setDraggingArrowHandleId(null);
+    }
+  }, [editingArrowAnnotation, editingArrowId, selectedAnnotationId]);
 
   useEffect(() => {
     if (!editingRectangleId) {
@@ -1519,6 +1605,14 @@ export function AnnotationCanvas({
       setEditingLineId(null);
       setLineEditPreview(null);
       setLineDragPreview(null);
+      setDraggingLineHandleId(null);
+    }
+
+    if (annotationId === editingArrowId) {
+      setEditingArrowId(null);
+      setArrowEditPreview(null);
+      setArrowDragPreview(null);
+      setDraggingArrowHandleId(null);
     }
 
     if (annotationId === editingRectangleId) {
@@ -1545,6 +1639,7 @@ export function AnnotationCanvas({
     cancelInlineTextEditor,
     commitDraft,
     editingCalloutTargetId,
+    editingArrowId,
     editingImageCalloutPanelId,
     editingLineId,
     editingRectangleId,
@@ -2167,6 +2262,12 @@ export function AnnotationCanvas({
       setLineEditPreview(null);
       setLineDragPreview(null);
     }
+    if (annotation.id !== editingArrowId) {
+      setEditingArrowId(null);
+      setArrowEditPreview(null);
+      setArrowDragPreview(null);
+      setDraggingArrowHandleId(null);
+    }
     if (annotation.id !== editingRectangleId) {
       setEditingRectangleId(null);
       setRectangleEditPreview(null);
@@ -2187,11 +2288,31 @@ export function AnnotationCanvas({
   const startLineEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setDraggingLineHandleId(null);
+    setEditingArrowId(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingLineId(annotationId);
     setLineEditPreview(null);
     setLineDragPreview(null);
+  }, [setActiveTool, setSelectedAnnotation]);
+
+  const startArrowEditing = useCallback((annotationId: string) => {
+    setActiveTool('select');
+    setSelectedAnnotation(annotationId);
+    setEditingLineId(null);
+    setLineEditPreview(null);
+    setLineDragPreview(null);
+    setDraggingLineHandleId(null);
+    setEditingRectangleId(null);
+    setRectangleEditPreview(null);
+    setEditingArrowId(annotationId);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
   }, [setActiveTool, setSelectedAnnotation]);
 
   const startRectangleEditing = useCallback((annotationId: string) => {
@@ -2200,6 +2321,11 @@ export function AnnotationCanvas({
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
+    setDraggingLineHandleId(null);
+    setEditingArrowId(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
     setEditingRectangleId(annotationId);
     setRectangleEditPreview(null);
   }, [setActiveTool, setSelectedAnnotation]);
@@ -2210,6 +2336,11 @@ export function AnnotationCanvas({
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
+    setDraggingLineHandleId(null);
+    setEditingArrowId(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingCalloutTargetId(annotationId);
@@ -2222,6 +2353,11 @@ export function AnnotationCanvas({
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
+    setDraggingLineHandleId(null);
+    setEditingArrowId(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingCalloutTargetId(null);
@@ -2230,11 +2366,16 @@ export function AnnotationCanvas({
 
   const clearCanvasSelection = useCallback(() => {
     setEditingLineId(null);
+    setDraggingLineHandleId(null);
+    setEditingArrowId(null);
     setEditingRectangleId(null);
     setEditingCalloutTargetId(null);
     setEditingImageCalloutPanelId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
     setRectangleEditPreview(null);
     setSelectedAnnotation(null);
   }, [setSelectedAnnotation]);
@@ -2255,6 +2396,23 @@ export function AnnotationCanvas({
       };
     });
   }, [editingLineAnnotation, updateAnnotation]);
+
+  const updateEditingArrowStyle = useCallback((patch: Partial<Annotation['style']>) => {
+    if (!editingArrowAnnotation) {
+      return;
+    }
+
+    updateAnnotation(editingArrowAnnotation.id, (current) => {
+      if (current.tool !== 'arrow' || current.geometry.kind !== 'arrow') {
+        return;
+      }
+
+      current.style = {
+        ...current.style,
+        ...patch,
+      };
+    });
+  }, [editingArrowAnnotation, updateAnnotation]);
 
   const updateEditingRectangleStyle = useCallback((patch: Partial<Annotation['style']>) => {
     if (!editingRectangleAnnotation) {
@@ -2315,6 +2473,22 @@ export function AnnotationCanvas({
     });
     setLineEditPreview(null);
     setLineDragPreview(null);
+    setDraggingLineHandleId(null);
+  }, [updateAnnotation]);
+  const commitArrowPoints = useCallback((annotationId: string, points: [number, number, number, number]) => {
+    updateAnnotation(annotationId, (current) => {
+      if (current.tool !== 'arrow' || current.geometry.kind !== 'arrow') {
+        return;
+      }
+
+      current.geometry = {
+        ...current.geometry,
+        points,
+      };
+    });
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
   }, [updateAnnotation]);
   const handleContextMenuAction = (actionId: ContextMenuActionId) => {
     const target = contextMenu.target;
@@ -2552,6 +2726,13 @@ export function AnnotationCanvas({
           setEditingLineId(null);
           setLineEditPreview(null);
           setLineDragPreview(null);
+          setDraggingLineHandleId(null);
+        }
+        if (annotation.id !== editingArrowId) {
+          setEditingArrowId(null);
+          setArrowEditPreview(null);
+          setArrowDragPreview(null);
+          setDraggingArrowHandleId(null);
         }
         if (annotation.id !== editingRectangleId) {
           setEditingRectangleId(null);
@@ -2570,6 +2751,13 @@ export function AnnotationCanvas({
           setEditingLineId(null);
           setLineEditPreview(null);
           setLineDragPreview(null);
+          setDraggingLineHandleId(null);
+        }
+        if (annotation.id !== editingArrowId) {
+          setEditingArrowId(null);
+          setArrowEditPreview(null);
+          setArrowDragPreview(null);
+          setDraggingArrowHandleId(null);
         }
         if (annotation.id !== editingRectangleId) {
           setEditingRectangleId(null);
@@ -2917,7 +3105,6 @@ export function AnnotationCanvas({
               stroke={annotation.style.stroke}
               strokeWidth={annotation.style.strokeWidth ?? 2}
               fill={annotation.style.fill}
-              dash={selected && !isEditingRectangle ? [8, 6] : undefined}
               cornerRadius={8}
             />
             {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry) : null}
@@ -2939,6 +3126,7 @@ export function AnnotationCanvas({
           lineDragPreview?.annotationId === annotation.id
             ? { x: lineDragPreview.dx, y: lineDragPreview.dy }
             : { x: 0, y: 0 };
+        const isDraggingLineHandle = draggingLineHandleId === annotation.id;
         const lineStrokeWidth = annotation.style.strokeWidth ?? 4;
         const lineDashSize = annotation.style.lineDashSize ?? (annotation.style.lineDash === 'dashed' ? 6 : 0);
         const lineDash = lineDashSize > 0 ? [lineDashSize * 2, lineDashSize] : undefined;
@@ -2946,6 +3134,7 @@ export function AnnotationCanvas({
         const lineEndMarker = annotation.style.lineEndMarker ?? 'none';
         const handleRadius = 6 / Math.max(canvasScale, 0.75);
         const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
+        const handleHitStrokeWidth = 20 / Math.max(canvasScale, 0.75);
         const startMarkerPoints =
           lineStartMarker !== 'none'
             ? getLineMarkerPoints(linePoints, 'start', lineStartMarker, lineStrokeWidth)
@@ -2961,11 +3150,11 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + dragOffset.x}
             y={renderedDocumentPosition.y + dragOffset.y}
             {...commonProps}
-            draggable={isEditingLine}
+            draggable={isEditingLine && !isDraggingLineHandle}
             onDblClick={() => startLineEditing(annotation.id)}
             onDblTap={() => startLineEditing(annotation.id)}
             onDragMove={(event) => {
-              if (!isEditingLine) {
+              if (!isEditingLine || isDraggingLineHandle) {
                 return;
               }
 
@@ -2977,7 +3166,7 @@ export function AnnotationCanvas({
               });
             }}
             onDragEnd={(event) => {
-              if (!isEditingLine) {
+              if (!isEditingLine || isDraggingLineHandle) {
                 return;
               }
 
@@ -3077,6 +3266,7 @@ export function AnnotationCanvas({
                   fill="#ffffff"
                   stroke="#2563eb"
                   strokeWidth={handleStrokeWidth}
+                  hitStrokeWidth={handleHitStrokeWidth}
                   draggable
                   onMouseDown={(event) => {
                     event.cancelBubble = true;
@@ -3084,7 +3274,13 @@ export function AnnotationCanvas({
                   onTouchStart={(event) => {
                     event.cancelBubble = true;
                   }}
+                  onDragStart={(event) => {
+                    event.cancelBubble = true;
+                    setDraggingLineHandleId(annotation.id);
+                    setLineDragPreview(null);
+                  }}
                   onDragMove={(event) => {
+                    event.cancelBubble = true;
                     const pos = event.target.position();
                     setLineEditPreview({
                       annotationId: annotation.id,
@@ -3092,7 +3288,9 @@ export function AnnotationCanvas({
                     });
                   }}
                   onDragEnd={(event) => {
+                    event.cancelBubble = true;
                     const pos = event.target.position();
+                    setDraggingLineHandleId(null);
                     commitLinePoints(annotation.id, replaceLineHandle(linePoints, 'start', pos.x, pos.y));
                   }}
                 />
@@ -3103,6 +3301,7 @@ export function AnnotationCanvas({
                   fill="#ffffff"
                   stroke="#2563eb"
                   strokeWidth={handleStrokeWidth}
+                  hitStrokeWidth={handleHitStrokeWidth}
                   draggable
                   onMouseDown={(event) => {
                     event.cancelBubble = true;
@@ -3110,7 +3309,13 @@ export function AnnotationCanvas({
                   onTouchStart={(event) => {
                     event.cancelBubble = true;
                   }}
+                  onDragStart={(event) => {
+                    event.cancelBubble = true;
+                    setDraggingLineHandleId(annotation.id);
+                    setLineDragPreview(null);
+                  }}
                   onDragMove={(event) => {
+                    event.cancelBubble = true;
                     const pos = event.target.position();
                     setLineEditPreview({
                       annotationId: annotation.id,
@@ -3118,7 +3323,9 @@ export function AnnotationCanvas({
                     });
                   }}
                   onDragEnd={(event) => {
+                    event.cancelBubble = true;
                     const pos = event.target.position();
+                    setDraggingLineHandleId(null);
                     commitLinePoints(annotation.id, replaceLineHandle(linePoints, 'end', pos.x, pos.y));
                   }}
                 />
@@ -3133,20 +3340,117 @@ export function AnnotationCanvas({
           return null;
         }
 
+        const isEditingArrow = !readOnly && !isPreview && editingArrowId === annotation.id;
+        const arrowPoints =
+          arrowEditPreview?.annotationId === annotation.id
+            ? arrowEditPreview.points
+            : geometry.points;
+        const isDraggingArrowHandle = draggingArrowHandleId === annotation.id;
+        const dragOffset =
+          arrowDragPreview?.annotationId === annotation.id
+            ? { x: arrowDragPreview.dx, y: arrowDragPreview.dy }
+            : { x: 0, y: 0 };
+        const arrowStrokeWidth = annotation.style.strokeWidth ?? 4;
+        const handleRadius = 6 / Math.max(canvasScale, 0.75);
+        const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
+        const handleHitStrokeWidth = 20 / Math.max(canvasScale, 0.75);
+
         return (
-          <Arrow
+          <Group
             key={annotation.id}
-            points={geometry.points}
-            x={renderedDocumentPosition.x}
-            y={renderedDocumentPosition.y}
-            stroke={annotation.style.stroke}
-            fill={annotation.style.stroke}
-            pointerLength={10}
-            pointerWidth={10}
-            strokeWidth={annotation.style.strokeWidth ?? 4}
-            dash={selected ? [8, 6] : undefined}
+            x={renderedDocumentPosition.x + dragOffset.x}
+            y={renderedDocumentPosition.y + dragOffset.y}
             {...commonProps}
-          />
+            draggable={isEditingArrow && !isDraggingArrowHandle}
+            onDblClick={() => startArrowEditing(annotation.id)}
+            onDblTap={() => startArrowEditing(annotation.id)}
+            onDragMove={(event) => {
+              if (!isEditingArrow || isDraggingArrowHandle) {
+                return;
+              }
+
+              const pos = event.target.position();
+              setArrowDragPreview({
+                annotationId: annotation.id,
+                dx: pos.x - renderedDocumentPosition.x,
+                dy: pos.y - renderedDocumentPosition.y,
+              });
+            }}
+            onDragEnd={(event) => {
+              if (!isEditingArrow || isDraggingArrowHandle) {
+                return;
+              }
+
+              const pos = event.target.position();
+              const dx = pos.x - renderedDocumentPosition.x;
+              const dy = pos.y - renderedDocumentPosition.y;
+              const nextPoints = translateLinePoints(arrowPoints, dx, dy);
+              event.target.position({
+                x: renderedDocumentPosition.x,
+                y: renderedDocumentPosition.y,
+              });
+              commitArrowPoints(annotation.id, nextPoints);
+            }}
+          >
+            {isEditingArrow ? (
+              <Arrow
+                points={arrowPoints}
+                stroke="#60a5fa"
+                fill="#60a5fa"
+                pointerLength={10}
+                pointerWidth={10}
+                strokeWidth={arrowStrokeWidth + 6 / Math.max(canvasScale, 0.75)}
+                opacity={0.2}
+                listening={false}
+              />
+            ) : null}
+            <Arrow
+              points={arrowPoints}
+              stroke={annotation.style.stroke}
+              fill={annotation.style.stroke}
+              pointerLength={10}
+              pointerWidth={10}
+              strokeWidth={arrowStrokeWidth}
+              hitStrokeWidth={18}
+            />
+            {isEditingArrow ? (
+              <Circle
+                x={arrowPoints[0]}
+                y={arrowPoints[1]}
+                radius={handleRadius}
+                fill="#ffffff"
+                stroke="#2563eb"
+                strokeWidth={handleStrokeWidth}
+                hitStrokeWidth={handleHitStrokeWidth}
+                draggable
+                onMouseDown={(event) => {
+                  event.cancelBubble = true;
+                }}
+                onTouchStart={(event) => {
+                  event.cancelBubble = true;
+                }}
+                onDragStart={(event) => {
+                  event.cancelBubble = true;
+                  setDraggingArrowHandleId(annotation.id);
+                  setArrowDragPreview(null);
+                }}
+                onDragMove={(event) => {
+                  event.cancelBubble = true;
+                  const pos = event.target.position();
+                  setArrowEditPreview({
+                    annotationId: annotation.id,
+                    points: replaceLineHandle(arrowPoints, 'start', pos.x, pos.y),
+                  });
+                }}
+                onDragEnd={(event) => {
+                  event.cancelBubble = true;
+                  const pos = event.target.position();
+                  setDraggingArrowHandleId(null);
+                  commitArrowPoints(annotation.id, replaceLineHandle(arrowPoints, 'start', pos.x, pos.y));
+                }}
+              />
+            ) : null}
+          </Group>
         );
       }
 
@@ -3924,24 +4228,38 @@ export function AnnotationCanvas({
         ) : null}
 
         {(lineToolbarRect && editingLineAnnotation) ||
+        (arrowToolbarRect && editingArrowAnnotation) ||
         (rectangleToolbarRect && editingRectangleAnnotation?.tool === 'rectangle') ? (
           <>
             <div
               ref={setLineToolbarReference}
               className="pointer-events-none absolute"
               style={{
-                left: lineToolbarRect?.left ?? rectangleToolbarRect?.left,
-                top: lineToolbarRect?.top ?? rectangleToolbarRect?.top,
-                width: lineToolbarRect?.width ?? rectangleToolbarRect?.width,
-                height: lineToolbarRect?.height ?? rectangleToolbarRect?.height,
+                left: lineToolbarRect?.left ?? arrowToolbarRect?.left ?? rectangleToolbarRect?.left,
+                top: lineToolbarRect?.top ?? arrowToolbarRect?.top ?? rectangleToolbarRect?.top,
+                width: lineToolbarRect?.width ?? arrowToolbarRect?.width ?? rectangleToolbarRect?.width,
+                height: lineToolbarRect?.height ?? arrowToolbarRect?.height ?? rectangleToolbarRect?.height,
               }}
             />
             <FloatingLineStyleToolbar
               isOpen
               reference={lineToolbarReference}
-              style={editingLineAnnotation?.style ?? editingRectangleAnnotation?.style ?? getDefaultStyle('line')}
-              onChange={editingLineAnnotation ? updateEditingLineStyle : updateEditingRectangleStyle}
+              style={
+                editingLineAnnotation?.style ??
+                editingArrowAnnotation?.style ??
+                editingRectangleAnnotation?.style ??
+                getDefaultStyle('line')
+              }
+              onChange={
+                editingLineAnnotation
+                  ? updateEditingLineStyle
+                  : editingArrowAnnotation
+                    ? updateEditingArrowStyle
+                    : updateEditingRectangleStyle
+              }
               showMarkers={Boolean(editingLineAnnotation)}
+              showStrokeWidth={!editingArrowAnnotation}
+              showDash={!editingArrowAnnotation}
             />
           </>
         ) : null}
