@@ -75,6 +75,7 @@ export interface WebMessages {
   contextMenu: {
     addText: string;
     rectangle: string;
+    polygon: string;
     line: string;
     arrow: string;
     highlight: string;
@@ -169,6 +170,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       labels: {
         select: 'Select',
         rectangle: 'Rect',
+        polygon: 'Irregular Area',
         line: 'Line',
         arrow: 'Arrow',
         highlight: 'Highlight',
@@ -182,6 +184,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
     contextMenu: {
       addText: 'Add text',
       rectangle: 'Rectangle',
+      polygon: 'Irregular Area',
       line: 'Line',
       arrow: 'Arrow',
       highlight: 'Highlight',
@@ -274,6 +277,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       labels: {
         select: '选择',
         rectangle: '矩形',
+        polygon: '不规则区域',
         line: '直线',
         arrow: '箭头',
         highlight: '高亮',
@@ -287,6 +291,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
     contextMenu: {
       addText: '添加文本',
       rectangle: '矩形',
+      polygon: '不规则区域',
       line: '直线',
       arrow: '箭头',
       highlight: '高亮',

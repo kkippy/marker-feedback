@@ -3,6 +3,7 @@ import type { AnnotationTool } from '@marker/shared';
 const SINGLE_USE_CANVAS_TOOLS = new Set<AnnotationTool>([
   'line',
   'rectangle',
+  'polygon',
   'arrow',
   'highlight',
   'marker',

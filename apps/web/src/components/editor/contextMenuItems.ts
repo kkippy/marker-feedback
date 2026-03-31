@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Minus,
   MousePointer2,
+  PenTool,
   RefreshCw,
   ScanText,
   Square,
@@ -19,6 +20,7 @@ import type { LucideIcon } from 'lucide-react';
 export type ContextMenuActionId =
   | 'add-text'
   | 'rectangle'
+  | 'polygon'
   | 'line'
   | 'arrow'
   | 'highlight'
@@ -40,7 +42,7 @@ export interface ContextMenuItem {
   children?: ContextMenuItem[];
   tool?: Extract<
     AnnotationTool,
-    'rectangle' | 'line' | 'arrow' | 'highlight' | 'marker' | 'text' | 'callout' | 'image-callout'
+    'rectangle' | 'polygon' | 'line' | 'arrow' | 'highlight' | 'marker' | 'text' | 'callout' | 'image-callout'
   >;
 }
 
@@ -51,6 +53,7 @@ export type ContextMenuTarget =
 export interface ContextMenuLabels {
   addText: string;
   rectangle: string;
+  polygon: string;
   line: string;
   arrow: string;
   highlight: string;
@@ -68,6 +71,7 @@ export interface ContextMenuLabels {
 const defaultLabels: ContextMenuLabels = {
   addText: 'Add text',
   rectangle: 'Rectangle',
+  polygon: 'Irregular Area',
   line: 'Line',
   arrow: 'Arrow',
   highlight: 'Highlight',
@@ -85,6 +89,7 @@ const defaultLabels: ContextMenuLabels = {
 const getCreationItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
   { id: 'add-text', label: labels.addText, icon: Type, tool: 'text' },
   { id: 'rectangle', label: labels.rectangle, icon: Square, tool: 'rectangle' },
+  { id: 'polygon', label: labels.polygon, icon: PenTool, tool: 'polygon' },
   { id: 'line', label: labels.line, icon: Minus, tool: 'line' },
   { id: 'arrow', label: labels.arrow, icon: ArrowRight, tool: 'arrow' },
   { id: 'highlight', label: labels.highlight, icon: Highlighter, tool: 'highlight' },

@@ -1,6 +1,7 @@
 export type AnnotationTool =
   | 'select'
   | 'rectangle'
+  | 'polygon'
   | 'line'
   | 'arrow'
   | 'highlight'
@@ -41,6 +42,11 @@ export interface LineGeometry {
   points: [number, number, number, number];
 }
 
+export interface PolygonGeometry {
+  kind: 'polygon';
+  points: number[];
+}
+
 export interface MarkerGeometry {
   kind: 'marker';
   x: number;
@@ -71,6 +77,7 @@ export type AnnotationGeometry =
   | RectGeometry
   | ArrowGeometry
   | LineGeometry
+  | PolygonGeometry
   | MarkerGeometry
   | TextGeometry
   | CalloutGeometry

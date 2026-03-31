@@ -64,6 +64,11 @@ export const moveGeometry = (geometry: AnnotationGeometry, dx: number, dy: numbe
           geometry.points[3] + dy,
         ],
       };
+    case 'polygon':
+      return {
+        ...geometry,
+        points: geometry.points.map((value, index) => value + (index % 2 === 0 ? dx : dy)),
+      };
   }
 };
 
@@ -122,6 +127,21 @@ export const getAnnotationBounds = (annotation: Annotation) => {
         y: Math.min(y1, y2),
         width: Math.abs(x2 - x1),
         height: Math.abs(y2 - y1),
+      };
+    }
+    case 'polygon': {
+      const xs = geometry.points.filter((_, index) => index % 2 === 0);
+      const ys = geometry.points.filter((_, index) => index % 2 === 1);
+      const left = Math.min(...xs);
+      const top = Math.min(...ys);
+      const right = Math.max(...xs);
+      const bottom = Math.max(...ys);
+
+      return {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
       };
     }
   }

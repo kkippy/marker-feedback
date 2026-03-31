@@ -28,6 +28,42 @@ describe('line geometry helpers', () => {
   });
 });
 
+describe('polygon geometry helpers', () => {
+  it('moves polygon geometry by delta', () => {
+    expect(
+      moveGeometry(
+        { kind: 'polygon', points: [10, 20, 30, 15, 28, 42] },
+        5,
+        -10,
+      ),
+    ).toEqual({
+      kind: 'polygon',
+      points: [15, 10, 35, 5, 33, 32],
+    });
+  });
+
+  it('returns bounds that cover all polygon vertices', () => {
+    expect(
+      getAnnotationBounds({
+        id: 'annotation-polygon',
+        assetId: 'asset-1',
+        tool: 'polygon',
+        geometry: {
+          kind: 'polygon',
+          points: [80, 40, 140, 60, 120, 150, 30, 110],
+        },
+        style: { stroke: '#2563eb', fill: 'rgba(37,99,235,0.18)' },
+        createdAt: '2026-03-31T00:00:00.000Z',
+      }),
+    ).toEqual({
+      x: 30,
+      y: 40,
+      width: 110,
+      height: 110,
+    });
+  });
+});
+
 describe('callout geometry helpers', () => {
   it('moves both the target box and text box together', () => {
     expect(

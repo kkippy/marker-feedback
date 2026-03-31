@@ -10,6 +10,7 @@ import {
   type CalloutGeometry,
   type EmbeddedImageAsset,
   type ImageCalloutGeometry,
+  type PolygonGeometry,
   type RectGeometry,
   type TextGeometry,
 } from '@marker/shared';
@@ -82,6 +83,11 @@ interface RectangleEditPreview {
   geometry: RectGeometry;
 }
 
+interface PolygonEditPreview {
+  annotationId: string;
+  points: number[];
+}
+
 interface RectResizeDragState {
   annotationId: string;
   handle: RectResizeHandle;
@@ -135,6 +141,8 @@ const fitImage = (imageWidth: number, imageHeight: number, maxWidth: number, max
 const getDefaultStyle = (tool: Annotation['tool']) =>
   tool === 'highlight'
     ? { ...getLinkedHighlightColorStyle('#fbbf24'), strokeWidth: 3 }
+    : tool === 'polygon'
+      ? { ...getLinkedHighlightColorStyle('#2563eb'), strokeWidth: 3 }
     : tool === 'blur'
       ? { stroke: '#0f172a', fill: 'rgba(15,23,42,0.45)', strokeWidth: 2 }
         : tool === 'line'
@@ -277,6 +285,38 @@ const getLineBounds = (points: [number, number, number, number], padding = 12) =
   };
 };
 
+const MIN_POLYGON_EDGE = 6;
+const POLYGON_CLOSE_DISTANCE = 14;
+
+const getPolygonBounds = (points: number[], padding = 12) => {
+  const xs = points.filter((_, index) => index % 2 === 0);
+  const ys = points.filter((_, index) => index % 2 === 1);
+  const minX = Math.min(...xs) - padding;
+  const minY = Math.min(...ys) - padding;
+  const maxX = Math.max(...xs) + padding;
+  const maxY = Math.max(...ys) + padding;
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+};
+
+const translatePolygonPoints = (points: number[], dx: number, dy: number) =>
+  points.map((value, index) => Number((value + (index % 2 === 0 ? dx : dy)).toFixed(2)));
+
+const replacePolygonVertex = (points: number[], vertexIndex: number, nextX: number, nextY: number) => {
+  const nextPoints = [...points];
+  nextPoints[vertexIndex * 2] = Number(nextX.toFixed(2));
+  nextPoints[vertexIndex * 2 + 1] = Number(nextY.toFixed(2));
+  return nextPoints;
+};
+
+const getDistanceBetweenPoints = (left: { x: number; y: number }, right: { x: number; y: number }) =>
+  Math.hypot(left.x - right.x, left.y - right.y);
+
 const replaceLineHandle = (
   points: [number, number, number, number],
   handle: 'start' | 'end',
@@ -398,6 +438,11 @@ const offsetAnnotationGeometry = (geometry: AnnotationGeometry): AnnotationGeome
           geometry.points[2] + COPY_OFFSET,
           geometry.points[3] + COPY_OFFSET,
         ],
+      };
+    case 'polygon':
+      return {
+        ...geometry,
+        points: geometry.points.map((value, index) => value + (index % 2 === 0 ? COPY_OFFSET : COPY_OFFSET)),
       };
     default:
       return geometry;
@@ -656,6 +701,13 @@ const getAnnotationExportBounds = (annotation: Annotation): ExportBounds | null 
 
       return getLineBounds(annotation.geometry.points, Math.max(16, strokeWidth * 4));
 
+    case 'polygon':
+      if (annotation.geometry.kind !== 'polygon') {
+        return null;
+      }
+
+      return getPolygonBounds(annotation.geometry.points, Math.max(12, strokeWidth * 3));
+
     case 'marker':
       if (annotation.geometry.kind !== 'marker') {
         return null;
@@ -817,11 +869,14 @@ export function AnnotationCanvas({
   const [viewportSize, setViewportSize] = useState({ width: DOCUMENT_WIDTH, height: DOCUMENT_HEIGHT });
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [preview, setPreview] = useState<Annotation | null>(null);
+  const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [pendingPolygonCursor, setPendingPolygonCursor] = useState<{ x: number; y: number } | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [hoveredTextAnnotationId, setHoveredTextAnnotationId] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editingArrowId, setEditingArrowId] = useState<string | null>(null);
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingRectangleId, setEditingRectangleId] = useState<string | null>(null);
   const [editingCalloutTargetId, setEditingCalloutTargetId] = useState<string | null>(null);
   const [editingImageCalloutPanelId, setEditingImageCalloutPanelId] = useState<string | null>(null);
@@ -831,6 +886,9 @@ export function AnnotationCanvas({
   const [arrowEditPreview, setArrowEditPreview] = useState<LineEditPreview | null>(null);
   const [arrowDragPreview, setArrowDragPreview] = useState<LineDragPreview | null>(null);
   const [draggingArrowHandleId, setDraggingArrowHandleId] = useState<string | null>(null);
+  const [polygonEditPreview, setPolygonEditPreview] = useState<PolygonEditPreview | null>(null);
+  const [polygonDragPreview, setPolygonDragPreview] = useState<LineDragPreview | null>(null);
+  const [draggingPolygonVertexId, setDraggingPolygonVertexId] = useState<string | null>(null);
   const [rectangleEditPreview, setRectangleEditPreview] = useState<RectangleEditPreview | null>(null);
   const [lineToolbarReference, setLineToolbarReference] = useState<HTMLDivElement | null>(null);
   const rectResizeDragStateRef = useRef<RectResizeDragState | null>(null);
@@ -1075,6 +1133,36 @@ export function AnnotationCanvas({
         : { x: 0, y: 0 },
     [arrowDragPreview, editingArrowId],
   );
+  const editingPolygonAnnotation = useMemo(() => {
+    if (!editingPolygonId) {
+      return null;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === editingPolygonId);
+    return annotation?.tool === 'polygon' && annotation.geometry.kind === 'polygon' ? annotation : null;
+  }, [draft.annotations, editingPolygonId]);
+  const editingPolygonPoints = useMemo(() => {
+    if (!editingPolygonAnnotation) {
+      return null;
+    }
+
+    const geometry = editingPolygonAnnotation.geometry;
+
+    if (geometry.kind !== 'polygon') {
+      return null;
+    }
+
+    return polygonEditPreview?.annotationId === editingPolygonAnnotation.id
+      ? polygonEditPreview.points
+      : geometry.points;
+  }, [editingPolygonAnnotation, polygonEditPreview]);
+  const editingPolygonOffset = useMemo(
+    () =>
+      polygonDragPreview?.annotationId === editingPolygonId
+        ? { x: polygonDragPreview.dx, y: polygonDragPreview.dy }
+        : { x: 0, y: 0 },
+    [editingPolygonId, polygonDragPreview],
+  );
   const editingRectangleAnnotation = useMemo(() => {
     if (!editingRectangleId) {
       return null;
@@ -1159,6 +1247,38 @@ export function AnnotationCanvas({
     editingArrowOffset.x,
     editingArrowOffset.y,
     editingArrowPoints,
+    layerOffsetX,
+    layerOffsetY,
+    readOnly,
+    renderedDocumentPosition.x,
+    renderedDocumentPosition.y,
+    scrollPosition.left,
+    scrollPosition.top,
+  ]);
+  const polygonToolbarRect = useMemo(() => {
+    if (!editingPolygonPoints || readOnly) {
+      return null;
+    }
+
+    const bounds = getPolygonBounds(editingPolygonPoints);
+
+    return {
+      left:
+        layerOffsetX -
+        scrollPosition.left +
+        (renderedDocumentPosition.x + editingPolygonOffset.x + bounds.x) * canvasScale,
+      top:
+        layerOffsetY -
+        scrollPosition.top +
+        (renderedDocumentPosition.y + editingPolygonOffset.y + bounds.y) * canvasScale,
+      width: bounds.width * canvasScale,
+      height: bounds.height * canvasScale,
+    };
+  }, [
+    canvasScale,
+    editingPolygonOffset.x,
+    editingPolygonOffset.y,
+    editingPolygonPoints,
     layerOffsetX,
     layerOffsetY,
     readOnly,
@@ -1576,13 +1696,19 @@ export function AnnotationCanvas({
 
   useEffect(() => {
     hasInitializedViewRef.current = false;
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setEditingLineId(null);
     setEditingRectangleId(null);
+    setEditingPolygonId(null);
     setEditingCalloutTargetId(null);
     setEditingImageCalloutPanelId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
     setDraggingLineHandleId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setRectangleEditPreview(null);
     zoomPreviewRef.current = null;
     clearZoomPreviewCommitTimeout();
@@ -1632,6 +1758,19 @@ export function AnnotationCanvas({
   }, [editingArrowAnnotation, editingArrowId, selectedAnnotationId]);
 
   useEffect(() => {
+    if (!editingPolygonId) {
+      return;
+    }
+
+    if (selectedAnnotationId !== editingPolygonId || !editingPolygonAnnotation) {
+      setEditingPolygonId(null);
+      setPolygonEditPreview(null);
+      setPolygonDragPreview(null);
+      setDraggingPolygonVertexId(null);
+    }
+  }, [editingPolygonAnnotation, editingPolygonId, selectedAnnotationId]);
+
+  useEffect(() => {
     if (!editingRectangleId) {
       return;
     }
@@ -1669,6 +1808,15 @@ export function AnnotationCanvas({
     viewportMetricsRef.current = committedViewportMetrics;
     setCanvasViewportSnapshot(viewportMetricsRef.current);
   }, [committedViewportMetrics]);
+
+  useEffect(() => {
+    if (activeTool === 'polygon') {
+      return;
+    }
+
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
+  }, [activeTool]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1832,6 +1980,13 @@ export function AnnotationCanvas({
       setDraggingArrowHandleId(null);
     }
 
+    if (annotationId === editingPolygonId) {
+      setEditingPolygonId(null);
+      setPolygonEditPreview(null);
+      setPolygonDragPreview(null);
+      setDraggingPolygonVertexId(null);
+    }
+
     if (annotationId === editingRectangleId) {
       setEditingRectangleId(null);
       setRectangleEditPreview(null);
@@ -1859,6 +2014,7 @@ export function AnnotationCanvas({
     editingArrowId,
     editingImageCalloutPanelId,
     editingLineId,
+    editingPolygonId,
     editingRectangleId,
     inlineTextEditor,
     selectedAnnotationId,
@@ -2414,6 +2570,45 @@ export function AnnotationCanvas({
   }, getCanvasWheelConfig({
     target: viewportRef,
   }));
+
+  const resetPendingPolygon = useCallback(() => {
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
+  }, []);
+
+  const commitPendingPolygon = useCallback((points: Array<{ x: number; y: number }>) => {
+    if (!draft.asset || points.length < 3) {
+      resetPendingPolygon();
+      return;
+    }
+
+    const flattenedPoints = points.flatMap((point) => [
+      Number(point.x.toFixed(2)),
+      Number(point.y.toFixed(2)),
+    ]);
+    const annotation = buildAnnotation(
+      'polygon',
+      { kind: 'polygon', points: flattenedPoints },
+      draft.asset.id,
+      draft.annotations.length + 1,
+    );
+
+    addAnnotation(annotation);
+    setActiveTool(getNextToolAfterCanvasCreate('polygon'));
+    resetPendingPolygon();
+  }, [addAnnotation, draft.asset, draft.annotations.length, resetPendingPolygon, setActiveTool]);
+
+  const appendPendingPolygonPoint = useCallback((point: { x: number; y: number }) => {
+    setPendingPolygonPoints((current) => {
+      if (current.length > 0 && getDistanceBetweenPoints(current[current.length - 1], point) < MIN_POLYGON_EDGE) {
+        return current;
+      }
+
+      return [...current, point];
+    });
+    setPendingPolygonCursor(point);
+  }, []);
+
   const handleStageMouseDown = (event: KonvaEventObject<MouseEvent>) => {
     if (
       readOnly ||
@@ -2460,6 +2655,26 @@ export function AnnotationCanvas({
 
     if (activeTool === 'text') {
       startInlineTextCreate(pointer);
+      return;
+    }
+
+    if (activeTool === 'polygon') {
+      if (event.evt.button !== 0) {
+        return;
+      }
+
+      event.evt.preventDefault();
+
+      if (event.evt.detail > 1) {
+        return;
+      }
+
+      if (pendingPolygonPoints.length >= 3 && getDistanceBetweenPoints(pendingPolygonPoints[0], pointer) <= POLYGON_CLOSE_DISTANCE) {
+        commitPendingPolygon(pendingPolygonPoints);
+        return;
+      }
+
+      appendPendingPolygonPoint(pointer);
       return;
     }
 
@@ -2522,6 +2737,12 @@ export function AnnotationCanvas({
       setArrowDragPreview(null);
       setDraggingArrowHandleId(null);
     }
+    if (annotation.id !== editingPolygonId) {
+      setEditingPolygonId(null);
+      setPolygonEditPreview(null);
+      setPolygonDragPreview(null);
+      setDraggingPolygonVertexId(null);
+    }
     if (annotation.id !== editingRectangleId) {
       setEditingRectangleId(null);
       setRectangleEditPreview(null);
@@ -2542,11 +2763,17 @@ export function AnnotationCanvas({
   const startLineEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setDraggingLineHandleId(null);
     setEditingArrowId(null);
     setArrowEditPreview(null);
     setArrowDragPreview(null);
     setDraggingArrowHandleId(null);
+    setEditingPolygonId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingLineId(annotationId);
@@ -2557,10 +2784,16 @@ export function AnnotationCanvas({
   const startArrowEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
     setDraggingLineHandleId(null);
+    setEditingPolygonId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingArrowId(annotationId);
@@ -2569,9 +2802,11 @@ export function AnnotationCanvas({
     setDraggingArrowHandleId(null);
   }, [setActiveTool, setSelectedAnnotation]);
 
-  const startRectangleEditing = useCallback((annotationId: string) => {
+  const startPolygonEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
@@ -2580,6 +2815,31 @@ export function AnnotationCanvas({
     setArrowEditPreview(null);
     setArrowDragPreview(null);
     setDraggingArrowHandleId(null);
+    setEditingRectangleId(null);
+    setRectangleEditPreview(null);
+    setEditingPolygonId(annotationId);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
+  }, [setActiveTool, setSelectedAnnotation]);
+
+  const startRectangleEditing = useCallback((annotationId: string) => {
+    setActiveTool('select');
+    setSelectedAnnotation(annotationId);
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
+    setEditingLineId(null);
+    setLineEditPreview(null);
+    setLineDragPreview(null);
+    setDraggingLineHandleId(null);
+    setEditingArrowId(null);
+    setArrowEditPreview(null);
+    setArrowDragPreview(null);
+    setDraggingArrowHandleId(null);
+    setEditingPolygonId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setEditingRectangleId(annotationId);
     setRectangleEditPreview(null);
   }, [setActiveTool, setSelectedAnnotation]);
@@ -2587,6 +2847,8 @@ export function AnnotationCanvas({
   const startCalloutTargetEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
@@ -2595,6 +2857,10 @@ export function AnnotationCanvas({
     setArrowEditPreview(null);
     setArrowDragPreview(null);
     setDraggingArrowHandleId(null);
+    setEditingPolygonId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingCalloutTargetId(annotationId);
@@ -2604,6 +2870,8 @@ export function AnnotationCanvas({
   const startImageCalloutPanelEditing = useCallback((annotationId: string) => {
     setActiveTool('select');
     setSelectedAnnotation(annotationId);
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setEditingLineId(null);
     setLineEditPreview(null);
     setLineDragPreview(null);
@@ -2612,6 +2880,10 @@ export function AnnotationCanvas({
     setArrowEditPreview(null);
     setArrowDragPreview(null);
     setDraggingArrowHandleId(null);
+    setEditingPolygonId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setEditingRectangleId(null);
     setRectangleEditPreview(null);
     setEditingCalloutTargetId(null);
@@ -2619,9 +2891,12 @@ export function AnnotationCanvas({
   }, [setActiveTool, setSelectedAnnotation]);
 
   const clearCanvasSelection = useCallback(() => {
+    setPendingPolygonPoints([]);
+    setPendingPolygonCursor(null);
     setEditingLineId(null);
     setDraggingLineHandleId(null);
     setEditingArrowId(null);
+    setEditingPolygonId(null);
     setEditingRectangleId(null);
     setEditingCalloutTargetId(null);
     setEditingImageCalloutPanelId(null);
@@ -2630,6 +2905,9 @@ export function AnnotationCanvas({
     setArrowEditPreview(null);
     setArrowDragPreview(null);
     setDraggingArrowHandleId(null);
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
     setRectangleEditPreview(null);
     setSelectedAnnotation(null);
   }, [setSelectedAnnotation]);
@@ -2667,6 +2945,29 @@ export function AnnotationCanvas({
       };
     });
   }, [editingArrowAnnotation, updateAnnotation]);
+
+  const updateEditingPolygonStyle = useCallback((patch: Partial<Annotation['style']>) => {
+    if (!editingPolygonAnnotation) {
+      return;
+    }
+
+    updateAnnotation(editingPolygonAnnotation.id, (current) => {
+      if (current.tool !== 'polygon' || current.geometry.kind !== 'polygon') {
+        return;
+      }
+
+      const linkedPolygonColorStyle =
+        patch.fill || patch.stroke
+          ? getLinkedHighlightColorStyle(patch.fill ?? patch.stroke)
+          : null;
+
+      current.style = {
+        ...current.style,
+        ...patch,
+        ...(linkedPolygonColorStyle ?? {}),
+      };
+    });
+  }, [editingPolygonAnnotation, updateAnnotation]);
 
   const updateEditingRectangleStyle = useCallback((patch: Partial<Annotation['style']>) => {
     if (!editingRectangleAnnotation) {
@@ -2798,6 +3099,21 @@ export function AnnotationCanvas({
     setArrowDragPreview(null);
     setDraggingArrowHandleId(null);
   }, [updateAnnotation]);
+  const commitPolygonPoints = useCallback((annotationId: string, points: number[]) => {
+    updateAnnotation(annotationId, (current) => {
+      if (current.tool !== 'polygon' || current.geometry.kind !== 'polygon') {
+        return;
+      }
+
+      current.geometry = {
+        ...current.geometry,
+        points,
+      };
+    });
+    setPolygonEditPreview(null);
+    setPolygonDragPreview(null);
+    setDraggingPolygonVertexId(null);
+  }, [updateAnnotation]);
   const handleContextMenuAction = (actionId: ContextMenuActionId) => {
     const target = contextMenu.target;
 
@@ -2812,6 +3128,7 @@ export function AnnotationCanvas({
 
     if (
       actionId === 'rectangle' ||
+      actionId === 'polygon' ||
       actionId === 'line' ||
       actionId === 'arrow' ||
       actionId === 'highlight' ||
@@ -2972,6 +3289,10 @@ export function AnnotationCanvas({
       return;
     }
 
+    if (activeTool === 'polygon') {
+      return;
+    }
+
     if (preview) {
       if (preview.tool === 'callout' && preview.geometry.kind === 'callout') {
         startInlineCalloutCreate(preview.geometry);
@@ -2990,6 +3311,21 @@ export function AnnotationCanvas({
     setDragStart(null);
   };
   const updatePreview = () => {
+    if (activeTool === 'polygon') {
+      if (!pendingPolygonPoints.length || readOnly || !draft.asset || panStateRef.current.active) {
+        return;
+      }
+
+      const pointer = getPointer(true);
+
+      if (!pointer) {
+        return;
+      }
+
+      setPendingPolygonCursor(pointer);
+      return;
+    }
+
     if (
       !dragStart ||
       readOnly ||
@@ -3030,6 +3366,8 @@ export function AnnotationCanvas({
     const geometry = annotation.geometry;
     const commonProps = {
       onClick: () => {
+        setPendingPolygonPoints([]);
+        setPendingPolygonCursor(null);
         if (annotation.id !== editingLineId) {
           setEditingLineId(null);
           setLineEditPreview(null);
@@ -3041,6 +3379,12 @@ export function AnnotationCanvas({
           setArrowEditPreview(null);
           setArrowDragPreview(null);
           setDraggingArrowHandleId(null);
+        }
+        if (annotation.id !== editingPolygonId) {
+          setEditingPolygonId(null);
+          setPolygonEditPreview(null);
+          setPolygonDragPreview(null);
+          setDraggingPolygonVertexId(null);
         }
         if (annotation.id !== editingRectangleId) {
           setEditingRectangleId(null);
@@ -3055,6 +3399,8 @@ export function AnnotationCanvas({
         setSelectedAnnotation(annotation.id);
       },
       onTap: () => {
+        setPendingPolygonPoints([]);
+        setPendingPolygonCursor(null);
         if (annotation.id !== editingLineId) {
           setEditingLineId(null);
           setLineEditPreview(null);
@@ -3066,6 +3412,12 @@ export function AnnotationCanvas({
           setArrowEditPreview(null);
           setArrowDragPreview(null);
           setDraggingArrowHandleId(null);
+        }
+        if (annotation.id !== editingPolygonId) {
+          setEditingPolygonId(null);
+          setPolygonEditPreview(null);
+          setPolygonDragPreview(null);
+          setDraggingPolygonVertexId(null);
         }
         if (annotation.id !== editingRectangleId) {
           setEditingRectangleId(null);
@@ -3431,6 +3783,141 @@ export function AnnotationCanvas({
                 commitRectGeometry(annotation.id, nextGeometry);
               },
             }) : null}
+          </Group>
+        );
+      }
+
+      case 'polygon': {
+        if (geometry.kind !== 'polygon') {
+          return null;
+        }
+
+        const polygonPoints =
+          polygonEditPreview?.annotationId === annotation.id
+            ? polygonEditPreview.points
+            : geometry.points;
+        const isEditingPolygon = !readOnly && !isPreview && !isExportingPng && editingPolygonId === annotation.id;
+        const dragOffset =
+          polygonDragPreview?.annotationId === annotation.id
+            ? { x: polygonDragPreview.dx, y: polygonDragPreview.dy }
+            : { x: 0, y: 0 };
+        const isDraggingPolygonVertex = draggingPolygonVertexId === annotation.id;
+        const polygonStrokeWidth = annotation.style.strokeWidth ?? 3;
+        const handleRadius = 6 / Math.max(canvasScale, 0.75);
+        const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
+        const handleHitStrokeWidth = 20 / Math.max(canvasScale, 0.75);
+
+        return (
+          <Group
+            key={annotation.id}
+            x={renderedDocumentPosition.x + dragOffset.x}
+            y={renderedDocumentPosition.y + dragOffset.y}
+            {...commonProps}
+            draggable={isEditingPolygon && !isDraggingPolygonVertex}
+            onDblClick={() => startPolygonEditing(annotation.id)}
+            onDblTap={() => startPolygonEditing(annotation.id)}
+            onDragMove={(event) => {
+              if (!isEditingPolygon || isDraggingPolygonVertex) {
+                return;
+              }
+
+              const pos = event.target.position();
+              setPolygonDragPreview({
+                annotationId: annotation.id,
+                dx: pos.x - renderedDocumentPosition.x,
+                dy: pos.y - renderedDocumentPosition.y,
+              });
+            }}
+            onDragEnd={(event) => {
+              if (!isEditingPolygon || isDraggingPolygonVertex) {
+                return;
+              }
+
+              const pos = event.target.position();
+              const dx = pos.x - renderedDocumentPosition.x;
+              const dy = pos.y - renderedDocumentPosition.y;
+              const nextPoints = translatePolygonPoints(polygonPoints, dx, dy);
+              event.target.position({
+                x: renderedDocumentPosition.x,
+                y: renderedDocumentPosition.y,
+              });
+              commitPolygonPoints(annotation.id, nextPoints);
+            }}
+          >
+            {isEditingPolygon ? (
+              <KonvaLine
+                points={polygonPoints}
+                closed
+                stroke="#60a5fa"
+                fill="rgba(96,165,250,0.12)"
+                strokeWidth={polygonStrokeWidth + 6 / Math.max(canvasScale, 0.75)}
+                opacity={0.28}
+                lineCap="round"
+                lineJoin="round"
+                listening={false}
+              />
+            ) : null}
+            <KonvaLine
+              points={polygonPoints}
+              closed
+              stroke={annotation.style.stroke}
+              fill={annotation.style.fill}
+              strokeWidth={polygonStrokeWidth}
+              lineCap="round"
+              lineJoin="round"
+              hitStrokeWidth={18}
+            />
+            {isEditingPolygon
+              ? polygonPoints.map((_, index) => {
+                  if (index % 2 !== 0) {
+                    return null;
+                  }
+
+                  const vertexIndex = index / 2;
+
+                  return (
+                    <Circle
+                      key={`${annotation.id}-vertex-${vertexIndex}`}
+                      x={polygonPoints[index]}
+                      y={polygonPoints[index + 1]}
+                      radius={handleRadius}
+                      fill="#ffffff"
+                      stroke="#2563eb"
+                      strokeWidth={handleStrokeWidth}
+                      hitStrokeWidth={handleHitStrokeWidth}
+                      draggable
+                      onMouseDown={(event) => {
+                        event.cancelBubble = true;
+                      }}
+                      onTouchStart={(event) => {
+                        event.cancelBubble = true;
+                      }}
+                      onDragStart={(event) => {
+                        event.cancelBubble = true;
+                        setDraggingPolygonVertexId(annotation.id);
+                        setPolygonDragPreview(null);
+                      }}
+                      onDragMove={(event) => {
+                        event.cancelBubble = true;
+                        const pos = event.target.position();
+                        setPolygonEditPreview({
+                          annotationId: annotation.id,
+                          points: replacePolygonVertex(polygonPoints, vertexIndex, pos.x, pos.y),
+                        });
+                      }}
+                      onDragEnd={(event) => {
+                        event.cancelBubble = true;
+                        const pos = event.target.position();
+                        setDraggingPolygonVertexId(null);
+                        commitPolygonPoints(
+                          annotation.id,
+                          replacePolygonVertex(polygonPoints, vertexIndex, pos.x, pos.y),
+                        );
+                      }}
+                    />
+                  );
+                })
+              : null}
           </Group>
         );
       }
@@ -4435,6 +4922,10 @@ export function AnnotationCanvas({
                   closeContextMenu();
                 }
 
+                if (activeTool === 'polygon') {
+                  return;
+                }
+
                 if (event.target === event.target.getStage()) {
                   clearCanvasSelection();
                 }
@@ -4494,6 +4985,46 @@ export function AnnotationCanvas({
                 </Group>
                 {draft.annotations.map((annotation) => renderAnnotation(annotation))}
                 {isExportingPng || !preview ? null : renderAnnotation(preview, true)}
+                {isExportingPng || !pendingPolygonPoints.length ? null : (
+                  <Group x={renderedDocumentPosition.x} y={renderedDocumentPosition.y}>
+                    <KonvaLine
+                      points={(pendingPolygonCursor && pendingPolygonPoints.length
+                        ? [...pendingPolygonPoints, pendingPolygonCursor]
+                        : pendingPolygonPoints
+                      ).flatMap((point) => [point.x, point.y])}
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      lineCap="round"
+                      lineJoin="round"
+                      listening={false}
+                    />
+                    {pendingPolygonPoints.map((point, index) => {
+                      const canClose = index === 0 && pendingPolygonPoints.length >= 3;
+
+                      return (
+                        <Circle
+                          key={`pending-polygon-${index}`}
+                          x={point.x}
+                          y={point.y}
+                          radius={canClose ? 6 : 4}
+                          fill={canClose ? '#ffffff' : '#2563eb'}
+                          stroke="#2563eb"
+                          strokeWidth={canClose ? 2 : 0}
+                          hitStrokeWidth={20}
+                          listening={canClose}
+                          onMouseDown={canClose ? (event) => {
+                            event.cancelBubble = true;
+                            commitPendingPolygon(pendingPolygonPoints);
+                          } : undefined}
+                          onTap={canClose ? (event) => {
+                            event.cancelBubble = true;
+                            commitPendingPolygon(pendingPolygonPoints);
+                          } : undefined}
+                        />
+                      );
+                    })}
+                  </Group>
+                )}
                 {isExportingPng || !pendingInlineCalloutGeometry ? null : (
                   <Group x={renderedDocumentPosition.x} y={renderedDocumentPosition.y}>
                     <Rect
@@ -4591,16 +5122,17 @@ export function AnnotationCanvas({
 
         {(lineToolbarRect && editingLineAnnotation) ||
         (arrowToolbarRect && editingArrowAnnotation) ||
+        (polygonToolbarRect && editingPolygonAnnotation) ||
         rectangleToolbarRect && editingRectangleAnnotation ? (
           <>
             <div
               ref={setLineToolbarReference}
               className="pointer-events-none absolute"
               style={{
-                left: lineToolbarRect?.left ?? arrowToolbarRect?.left ?? rectangleToolbarRect?.left,
-                top: lineToolbarRect?.top ?? arrowToolbarRect?.top ?? rectangleToolbarRect?.top,
-                width: lineToolbarRect?.width ?? arrowToolbarRect?.width ?? rectangleToolbarRect?.width,
-                height: lineToolbarRect?.height ?? arrowToolbarRect?.height ?? rectangleToolbarRect?.height,
+                left: lineToolbarRect?.left ?? arrowToolbarRect?.left ?? polygonToolbarRect?.left ?? rectangleToolbarRect?.left,
+                top: lineToolbarRect?.top ?? arrowToolbarRect?.top ?? polygonToolbarRect?.top ?? rectangleToolbarRect?.top,
+                width: lineToolbarRect?.width ?? arrowToolbarRect?.width ?? polygonToolbarRect?.width ?? rectangleToolbarRect?.width,
+                height: lineToolbarRect?.height ?? arrowToolbarRect?.height ?? polygonToolbarRect?.height ?? rectangleToolbarRect?.height,
               }}
             />
             <FloatingLineStyleToolbar
@@ -4609,6 +5141,7 @@ export function AnnotationCanvas({
               style={
                 editingLineAnnotation?.style ??
                 editingArrowAnnotation?.style ??
+                editingPolygonAnnotation?.style ??
                 editingRectangleAnnotation?.style ??
                 getDefaultStyle('line')
               }
@@ -4617,14 +5150,24 @@ export function AnnotationCanvas({
                   ? updateEditingLineStyle
                   : editingArrowAnnotation
                     ? updateEditingArrowStyle
+                    : editingPolygonAnnotation
+                      ? updateEditingPolygonStyle
                     : editingRectangleAnnotation?.tool === 'highlight'
                       ? updateEditingHighlightStyle
                       : updateEditingRectangleStyle
               }
               showMarkers={Boolean(editingLineAnnotation)}
-              showStrokeWidth={Boolean(editingLineAnnotation || editingRectangleAnnotation?.tool === 'rectangle')}
+              showStrokeWidth={Boolean(
+                editingLineAnnotation ||
+                editingPolygonAnnotation ||
+                editingRectangleAnnotation?.tool === 'rectangle',
+              )}
               showDash={Boolean(editingLineAnnotation || editingRectangleAnnotation?.tool === 'rectangle')}
-              colorTarget={editingRectangleAnnotation?.tool === 'highlight' ? 'fill' : 'stroke'}
+              colorTarget={
+                editingPolygonAnnotation || editingRectangleAnnotation?.tool === 'highlight'
+                  ? 'fill'
+                  : 'stroke'
+              }
             />
           </>
         ) : null}

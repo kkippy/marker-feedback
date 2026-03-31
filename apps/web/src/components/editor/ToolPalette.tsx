@@ -9,6 +9,7 @@ import {
   Image,
   MessageSquare,
   Minus,
+  PenTool,
   type LucideIcon,
   MousePointer2,
   ScanSearch,
@@ -23,6 +24,7 @@ import { cn } from '@/lib/utils';
 const primaryTools: AnnotationTool[] = [
   'select',
   'rectangle',
+  'polygon',
   'line',
   'arrow',
   'highlight',
@@ -36,6 +38,7 @@ const calloutTools: AnnotationTool[] = ['callout', 'image-callout'];
 const toolIcons: Record<AnnotationTool, LucideIcon> = {
   select: MousePointer2,
   rectangle: Square,
+  polygon: PenTool,
   line: Minus,
   arrow: ArrowRight,
   highlight: Highlighter,
