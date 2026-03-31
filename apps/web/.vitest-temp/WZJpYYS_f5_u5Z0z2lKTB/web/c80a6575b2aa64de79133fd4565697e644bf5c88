@@ -1,7 +1,0 @@
-__vite_ssr_exportName__("cn", () => { try { return cn } catch {} });
-const __vite_ssr_import_0__ = await __vite_ssr_import__("/@fs/C:/Users/李文博/Desktop/marker-feedback/node_modules/clsx/dist/clsx.mjs", {"importedNames":["clsx"]});
-
-const cn = (...inputs) => (0,__vite_ssr_import_0__.clsx)(inputs);
-
-//# sourceMappingSource=vite-node
-//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IjtBQUFBOztBQUVPLE1BQU0sS0FBSyxJQUFJLGNBQXlCLDRCQUFLLE1BQU0iLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbInV0aWxzLnRzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IGNsc3gsIHR5cGUgQ2xhc3NWYWx1ZSB9IGZyb20gJ2Nsc3gnO1xuXG5leHBvcnQgY29uc3QgY24gPSAoLi4uaW5wdXRzOiBDbGFzc1ZhbHVlW10pID0+IGNsc3goaW5wdXRzKTtcbiJdLCJmaWxlIjoiL3NyYy9saWIvdXRpbHMudHMifQ==
