@@ -236,7 +236,11 @@ export function InlineTextEditor({
     textarea.style.height = '0px';
 
     const minimumHeightPx = Math.max(
-      (allowHeightShrink ? minimumHeight : displayFrame.height) * canvasScale,
+      (
+        allowHeightShrink && textBoxMode === 'auto'
+          ? minimumHeight
+          : displayFrame.height
+      ) * canvasScale,
       minTextHeight * canvasScale,
     );
     const nextHeightPx = Math.max(Math.ceil(textarea.scrollHeight), minimumHeightPx);
@@ -529,12 +533,20 @@ export function InlineTextEditor({
             const edgeFrame = isEdgeHandle
               ? getRectEdgeHandleFrame(
                   handle as Extract<ResizeHandle, 'n' | 'e' | 's' | 'w'>,
-                  displayFrame,
+                  {
+                    width: displayFrame.width * canvasScale,
+                    height: displayFrame.height * canvasScale,
+                  },
                   EDGE_HANDLE_WIDTH,
                   EDGE_HANDLE_HEIGHT,
                 )
               : null;
-            const cornerPosition = !isEdgeHandle ? getRectHandlePosition(handle, displayFrame) : null;
+            const cornerPosition = !isEdgeHandle
+              ? getRectHandlePosition(handle, {
+                  width: displayFrame.width * canvasScale,
+                  height: displayFrame.height * canvasScale,
+                })
+              : null;
 
             return (
               <button

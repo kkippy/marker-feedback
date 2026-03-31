@@ -2636,6 +2636,38 @@ export function AnnotationCanvas({
     });
     setRectangleEditPreview(null);
   }, [updateAnnotation]);
+  const commitCalloutTargetGeometry = useCallback((annotationId: string, geometry: RectGeometry) => {
+    updateAnnotation(annotationId, (current) => {
+      if (current.tool === 'callout' && current.geometry.kind === 'callout') {
+        current.geometry = {
+          ...current.geometry,
+          target: geometry,
+        };
+        return;
+      }
+
+      if (current.tool === 'image-callout' && current.geometry.kind === 'image-callout') {
+        current.geometry = {
+          ...current.geometry,
+          target: geometry,
+        };
+      }
+    });
+    setDraggingCalloutTargetFrame(null);
+  }, [updateAnnotation]);
+  const commitImageCalloutPanelGeometry = useCallback((annotationId: string, geometry: RectGeometry) => {
+    updateAnnotation(annotationId, (current) => {
+      if (current.tool !== 'image-callout' || current.geometry.kind !== 'image-callout') {
+        return;
+      }
+
+      current.geometry = {
+        ...current.geometry,
+        panel: geometry,
+      };
+    });
+    setDraggingImageCalloutPanelFrame(null);
+  }, [updateAnnotation]);
   const updateSelectedCalloutColor = useCallback((patch: Partial<Annotation['style']>) => {
     const annotationId = editingCalloutTargetAnnotation?.annotation.id;
 
@@ -2968,7 +3000,14 @@ export function AnnotationCanvas({
       },
       onContextMenu: (event: KonvaEventObject<PointerEvent>) => openAnnotationContextMenu(annotation, event),
     };
-    const renderRectResizeHandles = (annotationId: string, renderedGeometry: RectGeometry) => {
+    const renderRectResizeHandles = (
+      annotationId: string,
+      renderedGeometry: RectGeometry,
+      options: {
+        onPreview: (geometry: RectGeometry) => void;
+        onCommit: (geometry: RectGeometry) => void;
+      },
+    ) => {
       const cornerHandleRadius = 6 / Math.max(canvasScale, 0.75);
       const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
       const edgeHandleWidth = 18 / Math.max(canvasScale, 0.75);
@@ -3032,10 +3071,7 @@ export function AnnotationCanvas({
                   minimumHeight: MIN_RECT_EDIT_HEIGHT,
                 });
 
-                setRectangleEditPreview({
-                  annotationId,
-                  geometry: nextGeometry,
-                });
+                options.onPreview(nextGeometry);
                 event.target.position(getRectHandlePosition(handle, nextGeometry));
               }}
               onDragEnd={(event) => {
@@ -3064,10 +3100,7 @@ export function AnnotationCanvas({
                 });
 
                 event.target.position(getRectHandlePosition(handle, nextGeometry));
-                commitRectGeometry(
-                  annotationId,
-                  nextGeometry,
-                );
+                options.onCommit(nextGeometry);
               }}
             />
           ) : (
@@ -3124,10 +3157,7 @@ export function AnnotationCanvas({
                   minimumHeight: MIN_RECT_EDIT_HEIGHT,
                 });
 
-                setRectangleEditPreview({
-                  annotationId,
-                  geometry: nextGeometry,
-                });
+                options.onPreview(nextGeometry);
                 event.target.position(getRectHandlePosition(handle, nextGeometry));
               }}
               onDragEnd={(event) => {
@@ -3156,10 +3186,7 @@ export function AnnotationCanvas({
                 });
 
                 event.target.position(getRectHandlePosition(handle, nextGeometry));
-                commitRectGeometry(
-                  annotationId,
-                  nextGeometry,
-                );
+                options.onCommit(nextGeometry);
               }}
             />
           )
@@ -3234,7 +3261,17 @@ export function AnnotationCanvas({
               dash={rectangleDash}
               cornerRadius={8}
             />
-            {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry) : null}
+            {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry, {
+              onPreview: (nextGeometry) => {
+                setRectangleEditPreview({
+                  annotationId: annotation.id,
+                  geometry: nextGeometry,
+                });
+              },
+              onCommit: (nextGeometry) => {
+                commitRectGeometry(annotation.id, nextGeometry);
+              },
+            }) : null}
           </Group>
         );
       }
@@ -3302,7 +3339,17 @@ export function AnnotationCanvas({
               fill={annotation.style.fill}
               cornerRadius={8}
             />
-            {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry) : null}
+            {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry, {
+              onPreview: (nextGeometry) => {
+                setRectangleEditPreview({
+                  annotationId: annotation.id,
+                  geometry: nextGeometry,
+                });
+              },
+              onCommit: (nextGeometry) => {
+                commitRectGeometry(annotation.id, nextGeometry);
+              },
+            }) : null}
           </Group>
         );
       }
@@ -3797,6 +3844,8 @@ export function AnnotationCanvas({
         const borderColor = annotation.style.stroke;
         const groupX = renderedDocumentPosition.x + calloutBounds.x;
         const groupY = renderedDocumentPosition.y + calloutBounds.y;
+        const isEditingCalloutTarget =
+          !readOnly && !isPreview && !isExportingPng && editingCalloutTargetId === annotation.id;
 
         return (
           <Group
@@ -3904,6 +3953,17 @@ export function AnnotationCanvas({
                 fill={annotation.style.fill ?? 'rgba(255,255,255,0)'}
                 cornerRadius={10}
               />
+              {isEditingCalloutTarget ? renderRectResizeHandles(annotation.id, renderedGeometry.target, {
+                onPreview: (nextGeometry) => {
+                  setDraggingCalloutTargetFrame({
+                    annotationId: annotation.id,
+                    target: nextGeometry,
+                  });
+                },
+                onCommit: (nextGeometry) => {
+                  commitCalloutTargetGeometry(annotation.id, nextGeometry);
+                },
+              }) : null}
             </Group>
             <KonvaLine
               points={connectorPoints}
@@ -4015,6 +4075,10 @@ export function AnnotationCanvas({
         const groupX = renderedDocumentPosition.x + calloutBounds.x;
         const groupY = renderedDocumentPosition.y + calloutBounds.y;
         const embeddedAsset = annotation.imageAssetId ? embeddedAssetsById.get(annotation.imageAssetId) : undefined;
+        const isEditingCalloutTarget =
+          !readOnly && !isPreview && !isExportingPng && editingCalloutTargetId === annotation.id;
+        const isEditingImageCalloutPanel =
+          !readOnly && !isPreview && !isExportingPng && editingImageCalloutPanelId === annotation.id;
 
         return (
           <Group
@@ -4122,6 +4186,17 @@ export function AnnotationCanvas({
                 fill={annotation.style.fill ?? 'rgba(255,255,255,0)'}
                 cornerRadius={10}
               />
+              {isEditingCalloutTarget ? renderRectResizeHandles(annotation.id, renderedGeometry.target, {
+                onPreview: (nextGeometry) => {
+                  setDraggingCalloutTargetFrame({
+                    annotationId: annotation.id,
+                    target: nextGeometry,
+                  });
+                },
+                onCommit: (nextGeometry) => {
+                  commitCalloutTargetGeometry(annotation.id, nextGeometry);
+                },
+              }) : null}
             </Group>
             <KonvaLine
               points={connectorPoints}
@@ -4194,6 +4269,17 @@ export function AnnotationCanvas({
                 shadowOpacity={isPreview ? 0 : 0.9}
               />
               <ImageCalloutPanel src={embeddedAsset?.imageDataUrl} panel={relativeGeometry.panel} />
+              {isEditingImageCalloutPanel ? renderRectResizeHandles(annotation.id, renderedGeometry.panel, {
+                onPreview: (nextGeometry) => {
+                  setDraggingImageCalloutPanelFrame({
+                    annotationId: annotation.id,
+                    panel: nextGeometry,
+                  });
+                },
+                onCommit: (nextGeometry) => {
+                  commitImageCalloutPanelGeometry(annotation.id, nextGeometry);
+                },
+              }) : null}
             </Group>
           </Group>
         );
