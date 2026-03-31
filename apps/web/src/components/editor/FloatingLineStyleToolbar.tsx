@@ -11,6 +11,7 @@ export function FloatingLineStyleToolbar({
   showMarkers = true,
   showStrokeWidth = true,
   showDash = true,
+  colorTarget = 'stroke',
 }: {
   isOpen: boolean;
   reference: HTMLElement | null;
@@ -19,6 +20,7 @@ export function FloatingLineStyleToolbar({
   showMarkers?: boolean;
   showStrokeWidth?: boolean;
   showDash?: boolean;
+  colorTarget?: 'stroke' | 'fill';
 }) {
   const { refs, floatingStyles, update } = useFloating({
     placement: 'top',
@@ -58,6 +60,7 @@ export function FloatingLineStyleToolbar({
           showMarkers={showMarkers}
           showStrokeWidth={showStrokeWidth}
           showDash={showDash}
+          colorTarget={colorTarget}
         />
       </div>
     </div>

@@ -64,6 +64,7 @@ const MAX_PENDING_WHEEL_DELTA = 360;
 const MAX_WHEEL_DELTA_APPLY_PER_FRAME = 84;
 const MIN_RECT_EDIT_WIDTH = 24;
 const MIN_RECT_EDIT_HEIGHT = 24;
+const HIGHLIGHT_FILL_ALPHA = 0.25;
 
 interface LineEditPreview {
   annotationId: string;
@@ -175,6 +176,32 @@ const getDefaultStyle = (tool: Annotation['tool']) =>
           : tool === 'text'
             ? { ...DEFAULT_TEXT_STYLE }
             : { stroke: '#ef4444', fill: 'rgba(239,68,68,0.08)', strokeWidth: 3 };
+
+const normalizeHexColorValue = (value: string) => {
+  const cleaned = value.trim().replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+
+  if (!cleaned) {
+    return '#000000';
+  }
+
+  if (cleaned.length === 3) {
+    return `#${cleaned
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')}`.toLowerCase();
+  }
+
+  return `#${cleaned.padEnd(6, '0')}`.toLowerCase();
+};
+
+const hexToRgba = (value: string, alpha: number) => {
+  const normalized = normalizeHexColorValue(value);
+  const red = Number.parseInt(normalized.slice(1, 3), 16);
+  const green = Number.parseInt(normalized.slice(3, 5), 16);
+  const blue = Number.parseInt(normalized.slice(5, 7), 16);
+
+  return `rgba(${red},${green},${blue},${alpha})`;
+};
 
 const buildAnnotation = (
   tool: Annotation['tool'],
@@ -2626,6 +2653,23 @@ export function AnnotationCanvas({
       };
     });
   }, [editingRectangleAnnotation, updateAnnotation]);
+  const updateEditingHighlightStyle = useCallback((patch: Partial<Annotation['style']>) => {
+    if (!editingRectangleAnnotation) {
+      return;
+    }
+
+    updateAnnotation(editingRectangleAnnotation.id, (current) => {
+      if (current.tool !== 'highlight' || current.geometry.kind !== 'rect') {
+        return;
+      }
+
+      current.style = {
+        ...current.style,
+        ...patch,
+        fill: patch.fill ? hexToRgba(patch.fill, HIGHLIGHT_FILL_ALPHA) : current.style.fill,
+      };
+    });
+  }, [editingRectangleAnnotation, updateAnnotation]);
   const commitRectGeometry = useCallback((annotationId: string, geometry: RectGeometry) => {
     updateAnnotation(annotationId, (current) => {
       if (current.geometry.kind !== 'rect') {
@@ -4510,7 +4554,7 @@ export function AnnotationCanvas({
 
         {(lineToolbarRect && editingLineAnnotation) ||
         (arrowToolbarRect && editingArrowAnnotation) ||
-        (rectangleToolbarRect && editingRectangleAnnotation?.tool === 'rectangle') ? (
+        rectangleToolbarRect && editingRectangleAnnotation ? (
           <>
             <div
               ref={setLineToolbarReference}
@@ -4536,11 +4580,14 @@ export function AnnotationCanvas({
                   ? updateEditingLineStyle
                   : editingArrowAnnotation
                     ? updateEditingArrowStyle
-                    : updateEditingRectangleStyle
+                    : editingRectangleAnnotation?.tool === 'highlight'
+                      ? updateEditingHighlightStyle
+                      : updateEditingRectangleStyle
               }
               showMarkers={Boolean(editingLineAnnotation)}
-              showStrokeWidth={!editingArrowAnnotation}
-              showDash={!editingArrowAnnotation}
+              showStrokeWidth={Boolean(editingLineAnnotation || editingRectangleAnnotation?.tool === 'rectangle')}
+              showDash={Boolean(editingLineAnnotation || editingRectangleAnnotation?.tool === 'rectangle')}
+              colorTarget={editingRectangleAnnotation?.tool === 'highlight' ? 'fill' : 'stroke'}
             />
           </>
         ) : null}

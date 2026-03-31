@@ -1,0 +1,12 @@
+__vite_ssr_exportName__("getNextToolAfterCanvasCreate", () => { try { return getNextToolAfterCanvasCreate } catch {} });
+const SINGLE_USE_CANVAS_TOOLS = /* @__PURE__ */ new Set([
+  "line",
+  "rectangle",
+  "arrow",
+  "highlight",
+  "marker"
+]);
+const getNextToolAfterCanvasCreate = (tool) => SINGLE_USE_CANVAS_TOOLS.has(tool) ? "select" : tool;
+
+//# sourceMappingSource=vite-node
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IjtBQUVBLE1BQU0sMEJBQTBCLG9CQUFJLElBQW9CO0FBQUEsRUFDdEQ7QUFBQSxFQUNBO0FBQUEsRUFDQTtBQUFBLEVBQ0E7QUFBQSxFQUNBO0FBQ0YsQ0FBQztBQUVNLE1BQU0sK0JBQStCLENBQUMsU0FDM0Msd0JBQXdCLElBQUksSUFBSSxJQUFJLFdBQVciLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbInNpbmdsZVVzZUNhbnZhc1Rvb2xzLnRzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB0eXBlIHsgQW5ub3RhdGlvblRvb2wgfSBmcm9tICdAbWFya2VyL3NoYXJlZCc7XG5cbmNvbnN0IFNJTkdMRV9VU0VfQ0FOVkFTX1RPT0xTID0gbmV3IFNldDxBbm5vdGF0aW9uVG9vbD4oW1xuICAnbGluZScsXG4gICdyZWN0YW5nbGUnLFxuICAnYXJyb3cnLFxuICAnaGlnaGxpZ2h0JyxcbiAgJ21hcmtlcicsXG5dKTtcblxuZXhwb3J0IGNvbnN0IGdldE5leHRUb29sQWZ0ZXJDYW52YXNDcmVhdGUgPSAodG9vbDogQW5ub3RhdGlvblRvb2wpOiBBbm5vdGF0aW9uVG9vbCA9PlxuICBTSU5HTEVfVVNFX0NBTlZBU19UT09MUy5oYXModG9vbCkgPyAnc2VsZWN0JyA6IHRvb2w7XG4iXSwiZmlsZSI6Ii9zcmMvY29tcG9uZW50cy9lZGl0b3Ivc2luZ2xlVXNlQ2FudmFzVG9vbHMudHMifQ==

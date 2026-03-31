@@ -1,0 +1,74 @@
+__vite_ssr_exportName__("FloatingLineStyleToolbar", () => { try { return FloatingLineStyleToolbar } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/@fs/C:/Users/李文博/Desktop/marker-feedback/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/@fs/C:/Users/李文博/Desktop/marker-feedback/node_modules/react/index.js", {"importedNames":["useEffect"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/@fs/C:/Users/李文博/Desktop/marker-feedback/node_modules/@floating-ui/react-dom/dist/floating-ui.react-dom.mjs", {"importedNames":["autoUpdate","flip","offset","shift","useFloating"]});
+const __vite_ssr_import_3__ = await __vite_ssr_import__("/src/components/editor/LineStyleControls.tsx", {"importedNames":["LineStyleControls"]});
+
+
+
+
+function FloatingLineStyleToolbar({
+  isOpen,
+  reference,
+  style,
+  onChange,
+  showMarkers = true,
+  showStrokeWidth = true,
+  showDash = true,
+  colorTarget = "stroke"
+}) {
+  const { refs, floatingStyles, update } = (0,__vite_ssr_import_2__.useFloating)({
+    placement: "top",
+    strategy: "fixed",
+    whileElementsMounted: __vite_ssr_import_2__.autoUpdate,
+    middleware: [
+      (0,__vite_ssr_import_2__.offset)(18),
+      (0,__vite_ssr_import_2__.flip)({
+        fallbackPlacements: ["bottom"]
+      }),
+      (0,__vite_ssr_import_2__.shift)({ padding: 8 })
+    ]
+  });
+  (0,__vite_ssr_import_1__.useEffect)(() => {
+    refs.setReference(reference);
+  }, [reference, refs]);
+  (0,__vite_ssr_import_1__.useEffect)(() => {
+    if (!isOpen || !reference) {
+      return;
+    };
+    void update();
+  }, [isOpen, reference, update]);
+  if (!isOpen || !reference) {
+    return null;
+  };
+  return /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)("div", { ref: refs.setFloating, style: floatingStyles, className: "pointer-events-auto z-50", children: /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)("div", { className: "rounded-[1.25rem] border border-slate-200 bg-white/96 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur", children: /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)(
+    (0,__vite_ssr_import_3__.LineStyleControls),
+    {
+      style,
+      onChange,
+      showMarkers,
+      showStrokeWidth,
+      showDash,
+      colorTarget
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/editor/FloatingLineStyleToolbar.tsx",
+      lineNumber: 57,
+      columnNumber: 9
+    },
+    this
+  ) }, void 0, false, {
+    fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/editor/FloatingLineStyleToolbar.tsx",
+    lineNumber: 56,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/editor/FloatingLineStyleToolbar.tsx",
+    lineNumber: 55,
+    columnNumber: 5
+  }, this);
+}
+
+//# sourceMappingSource=vite-node
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IjtBQXdEUTtBQXhEUjtBQUNBO0FBRUE7Ozs7O0FBRU8sU0FBUyx5QkFBeUI7QUFBQSxFQUN2QztBQUFBLEVBQ0E7QUFBQSxFQUNBO0FBQUEsRUFDQTtBQUFBLEVBQ0EsY0FBYztBQUFBLEVBQ2Qsa0JBQWtCO0FBQUEsRUFDbEIsV0FBVztBQUFBLEVBQ1gsY0FBYztBQUNoQixHQVNHO0FBQ0QsUUFBTSxFQUFFLE1BQU0sZ0JBQWdCLE9BQU8sT0FBSSxtQ0FBWTtBQUFBLElBQ25ELFdBQVc7QUFBQSxJQUNYLFVBQVU7QUFBQSxJQUNWLHNCQUFzQjtBQUFBLElBQ3RCLFlBQVk7QUFBQSxTQUNWLDhCQUFPLEVBQUU7QUFBQSxTQUNULDRCQUFLO0FBQUEsUUFDSCxvQkFBb0IsQ0FBQyxRQUFRO0FBQUEsTUFDL0IsQ0FBQztBQUFBLFNBQ0QsNkJBQU0sRUFBRSxTQUFTLEVBQUUsQ0FBQztBQUFBLElBQ3RCO0FBQUEsRUFDRixDQUFDO0FBRUQsc0NBQVUsTUFBTTtBQUNkLFNBQUssYUFBYSxTQUFTO0FBQUEsRUFDN0IsR0FBRyxDQUFDLFdBQVcsSUFBSSxDQUFDO0FBRXBCLHNDQUFVLE1BQU07QUFDZCxRQUFJLENBQUMsVUFBVSxDQUFDLFdBQVc7QUFDekI7QUFBQSxJQUNGO0FBRUEsU0FBSyxPQUFPO0FBQUEsRUFDZCxHQUFHLENBQUMsUUFBUSxXQUFXLE1BQU0sQ0FBQztBQUU5QixNQUFJLENBQUMsVUFBVSxDQUFDLFdBQVc7QUFDekIsV0FBTztBQUFBLEVBQ1Q7QUFFQSxTQUNFLGlEQUFDLFNBQUksS0FBSyxLQUFLLGFBQWEsT0FBTyxnQkFBZ0IsV0FBVSw0QkFDM0QsMkRBQUMsU0FBSSxXQUFVLG9IQUNiO0FBQUEsT0FBQztBQUFBO0FBQUEsTUFDQztBQUFBLE1BQ0E7QUFBQSxNQUNBO0FBQUEsTUFDQTtBQUFBLE1BQ0E7QUFBQSxNQUNBO0FBQUE7QUFBQSxJQU5GO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxFQU9BLEtBUkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQVNBLEtBVkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQVdBO0FBRUoiLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIkZsb2F0aW5nTGluZVN0eWxlVG9vbGJhci50c3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgdXNlRWZmZWN0IH0gZnJvbSAncmVhY3QnO1xuaW1wb3J0IHsgYXV0b1VwZGF0ZSwgZmxpcCwgb2Zmc2V0LCBzaGlmdCwgdXNlRmxvYXRpbmcgfSBmcm9tICdAZmxvYXRpbmctdWkvcmVhY3QtZG9tJztcbmltcG9ydCB0eXBlIHsgQW5ub3RhdGlvblN0eWxlIH0gZnJvbSAnQG1hcmtlci9zaGFyZWQnO1xuaW1wb3J0IHsgTGluZVN0eWxlQ29udHJvbHMgfSBmcm9tICcuL0xpbmVTdHlsZUNvbnRyb2xzJztcblxuZXhwb3J0IGZ1bmN0aW9uIEZsb2F0aW5nTGluZVN0eWxlVG9vbGJhcih7XG4gIGlzT3BlbixcbiAgcmVmZXJlbmNlLFxuICBzdHlsZSxcbiAgb25DaGFuZ2UsXG4gIHNob3dNYXJrZXJzID0gdHJ1ZSxcbiAgc2hvd1N0cm9rZVdpZHRoID0gdHJ1ZSxcbiAgc2hvd0Rhc2ggPSB0cnVlLFxuICBjb2xvclRhcmdldCA9ICdzdHJva2UnLFxufToge1xuICBpc09wZW46IGJvb2xlYW47XG4gIHJlZmVyZW5jZTogSFRNTEVsZW1lbnQgfCBudWxsO1xuICBzdHlsZTogQW5ub3RhdGlvblN0eWxlO1xuICBvbkNoYW5nZTogKHBhdGNoOiBQYXJ0aWFsPEFubm90YXRpb25TdHlsZT4pID0+IHZvaWQ7XG4gIHNob3dNYXJrZXJzPzogYm9vbGVhbjtcbiAgc2hvd1N0cm9rZVdpZHRoPzogYm9vbGVhbjtcbiAgc2hvd0Rhc2g/OiBib29sZWFuO1xuICBjb2xvclRhcmdldD86ICdzdHJva2UnIHwgJ2ZpbGwnO1xufSkge1xuICBjb25zdCB7IHJlZnMsIGZsb2F0aW5nU3R5bGVzLCB1cGRhdGUgfSA9IHVzZUZsb2F0aW5nKHtcbiAgICBwbGFjZW1lbnQ6ICd0b3AnLFxuICAgIHN0cmF0ZWd5OiAnZml4ZWQnLFxuICAgIHdoaWxlRWxlbWVudHNNb3VudGVkOiBhdXRvVXBkYXRlLFxuICAgIG1pZGRsZXdhcmU6IFtcbiAgICAgIG9mZnNldCgxOCksXG4gICAgICBmbGlwKHtcbiAgICAgICAgZmFsbGJhY2tQbGFjZW1lbnRzOiBbJ2JvdHRvbSddLFxuICAgICAgfSksXG4gICAgICBzaGlmdCh7IHBhZGRpbmc6IDggfSksXG4gICAgXSxcbiAgfSk7XG5cbiAgdXNlRWZmZWN0KCgpID0+IHtcbiAgICByZWZzLnNldFJlZmVyZW5jZShyZWZlcmVuY2UpO1xuICB9LCBbcmVmZXJlbmNlLCByZWZzXSk7XG5cbiAgdXNlRWZmZWN0KCgpID0+IHtcbiAgICBpZiAoIWlzT3BlbiB8fCAhcmVmZXJlbmNlKSB7XG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgdm9pZCB1cGRhdGUoKTtcbiAgfSwgW2lzT3BlbiwgcmVmZXJlbmNlLCB1cGRhdGVdKTtcblxuICBpZiAoIWlzT3BlbiB8fCAhcmVmZXJlbmNlKSB7XG4gICAgcmV0dXJuIG51bGw7XG4gIH1cblxuICByZXR1cm4gKFxuICAgIDxkaXYgcmVmPXtyZWZzLnNldEZsb2F0aW5nfSBzdHlsZT17ZmxvYXRpbmdTdHlsZXN9IGNsYXNzTmFtZT1cInBvaW50ZXItZXZlbnRzLWF1dG8gei01MFwiPlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJyb3VuZGVkLVsxLjI1cmVtXSBib3JkZXIgYm9yZGVyLXNsYXRlLTIwMCBiZy13aGl0ZS85NiBwLTIgc2hhZG93LVswXzE4cHhfNDhweF9yZ2JhKDE1LDIzLDQyLDAuMTgpXSBiYWNrZHJvcC1ibHVyXCI+XG4gICAgICAgIDxMaW5lU3R5bGVDb250cm9sc1xuICAgICAgICAgIHN0eWxlPXtzdHlsZX1cbiAgICAgICAgICBvbkNoYW5nZT17b25DaGFuZ2V9XG4gICAgICAgICAgc2hvd01hcmtlcnM9e3Nob3dNYXJrZXJzfVxuICAgICAgICAgIHNob3dTdHJva2VXaWR0aD17c2hvd1N0cm9rZVdpZHRofVxuICAgICAgICAgIHNob3dEYXNoPXtzaG93RGFzaH1cbiAgICAgICAgICBjb2xvclRhcmdldD17Y29sb3JUYXJnZXR9XG4gICAgICAgIC8+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgKTtcbn1cbiJdLCJmaWxlIjoiL3NyYy9jb21wb25lbnRzL2VkaXRvci9GbG9hdGluZ0xpbmVTdHlsZVRvb2xiYXIudHN4In0=

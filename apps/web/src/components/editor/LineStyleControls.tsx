@@ -29,6 +29,7 @@ const idleDockMotion = getContextMenuDockMotion(Number.POSITIVE_INFINITY);
 type NumericControlType = 'strokeWidth' | 'lineDashSize';
 type MarkerStyle = NonNullable<AnnotationStyle['lineStartMarker']>;
 type MarkerMenuTarget = 'start' | 'end' | null;
+type ColorTarget = 'stroke' | 'fill';
 
 const MARKER_OPTIONS: MarkerStyle[] = ['none', 'arrow', 'bar', 'dot'];
 
@@ -49,6 +50,29 @@ const normalizeHexColor = (value: string) => {
   }
 
   return `#${cleaned.padEnd(6, '0')}`.toLowerCase();
+};
+
+const normalizePickerColor = (value: string | undefined) => {
+  if (!value) {
+    return '#000000';
+  }
+
+  if (value.startsWith('#')) {
+    return normalizeHexColor(value);
+  }
+
+  const rgbMatch = value.match(/rgba?\(([^)]+)\)/i);
+
+  if (!rgbMatch) {
+    return '#000000';
+  }
+
+  const channels = rgbMatch[1]
+    .split(',')
+    .slice(0, 3)
+    .map((channel) => Math.max(0, Math.min(255, Number.parseInt(channel.trim(), 10) || 0)));
+
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 };
 
 const normalizeNumericValue = (value: number, min: number, max: number) =>
@@ -509,12 +533,14 @@ export function LineStyleControls({
   showMarkers = true,
   showStrokeWidth = true,
   showDash = true,
+  colorTarget = 'stroke',
 }: {
   style: AnnotationStyle;
   onChange: (patch: Partial<AnnotationStyle>) => void;
   showMarkers?: boolean;
   showStrokeWidth?: boolean;
   showDash?: boolean;
+  colorTarget?: ColorTarget;
 }) {
   const { locale } = useLocale();
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
@@ -524,11 +550,13 @@ export function LineStyleControls({
   const [dashSizeInput, setDashSizeInput] = useState(formatNumericValue(style.lineDashSize ?? (style.lineDash === 'dashed' ? 6 : 0)));
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const stroke = style.stroke ?? '#0f172a';
+  const fill = style.fill ?? '#000000';
   const strokeWidth = style.strokeWidth ?? 4;
   const dashSize = style.lineDashSize ?? (style.lineDash === 'dashed' ? 6 : 0);
   const startMarker = style.lineStartMarker ?? 'none';
   const endMarker = style.lineEndMarker ?? 'none';
-  const normalizedStroke = useMemo(() => normalizeHexColor(stroke), [stroke]);
+  const activeColor = colorTarget === 'fill' ? fill : stroke;
+  const normalizedActiveColor = useMemo(() => normalizePickerColor(activeColor), [activeColor]);
   const labels = useMemo(
     () =>
       locale === 'zh-CN'
@@ -541,9 +569,18 @@ export function LineStyleControls({
             startMenu: '\u8bbe\u7f6e\u7ebf\u6bb5\u8d77\u70b9\u6837\u5f0f',
             end: '\u7ec8\u70b9',
             endMenu: '\u8bbe\u7f6e\u7ebf\u6bb5\u7ec8\u70b9\u6837\u5f0f',
-            customColor: '\u81ea\u5b9a\u4e49\u7ebf\u6761\u989c\u8272',
-            customColorHex: '\u81ea\u5b9a\u4e49\u7ebf\u6761\u989c\u8272\u5341\u516d\u8fdb\u5236\u503c',
-            lineColor: (color: string) => `\u7ebf\u6761\u989c\u8272 ${color}`,
+            customColor: {
+              stroke: '\u81ea\u5b9a\u4e49\u7ebf\u6761\u989c\u8272',
+              fill: '\u81ea\u5b9a\u4e49\u586b\u5145\u989c\u8272',
+            } satisfies Record<ColorTarget, string>,
+            customColorHex: {
+              stroke: '\u81ea\u5b9a\u4e49\u7ebf\u6761\u989c\u8272\u5341\u516d\u8fdb\u5236\u503c',
+              fill: '\u81ea\u5b9a\u4e49\u586b\u5145\u989c\u8272\u5341\u516d\u8fdb\u5236\u503c',
+            } satisfies Record<ColorTarget, string>,
+            colorLabel: {
+              stroke: (color: string) => `\u7ebf\u6761\u989c\u8272 ${color}`,
+              fill: (color: string) => `\u586b\u5145\u989c\u8272 ${color}`,
+            } satisfies Record<ColorTarget, (color: string) => string>,
             markerOption: {
               none: '\u65e0',
               arrow: '\u7bad\u5934',
@@ -560,9 +597,18 @@ export function LineStyleControls({
             startMenu: 'Set line start style',
             end: 'End',
             endMenu: 'Set line end style',
-            customColor: 'Custom line color',
-            customColorHex: 'Custom line color hex value',
-            lineColor: (color: string) => `Line color ${color}`,
+            customColor: {
+              stroke: 'Custom line color',
+              fill: 'Custom fill color',
+            } satisfies Record<ColorTarget, string>,
+            customColorHex: {
+              stroke: 'Custom line color hex value',
+              fill: 'Custom fill color hex value',
+            } satisfies Record<ColorTarget, string>,
+            colorLabel: {
+              stroke: (color: string) => `Line color ${color}`,
+              fill: (color: string) => `Fill color ${color}`,
+            } satisfies Record<ColorTarget, (color: string) => string>,
             markerOption: {
               none: 'None',
               arrow: 'Arrow',
@@ -572,6 +618,9 @@ export function LineStyleControls({
           },
     [locale],
   );
+  const emitColorChange = (color: string) => {
+    onChange(colorTarget === 'fill' ? { fill: color } : { stroke: color });
+  };
   const createPressHandlers = (callback: () => void) => ({
     onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
@@ -617,13 +666,15 @@ export function LineStyleControls({
           <button
             key={color}
             type="button"
-            aria-label={labels.lineColor(color)}
-            title={labels.lineColor(color)}
+            aria-label={labels.colorLabel[colorTarget](color)}
+            title={labels.colorLabel[colorTarget](color)}
             className={cn(
               'flex size-7 items-center justify-center rounded-full border transition',
-              stroke === color ? 'border-slate-900' : 'border-transparent hover:border-slate-300',
+              normalizedActiveColor === normalizePickerColor(color)
+                ? 'border-slate-900'
+                : 'border-transparent hover:border-slate-300',
             )}
-            {...createPressHandlers(() => onChange({ stroke: color }))}
+            {...createPressHandlers(() => emitColorChange(color))}
           >
             <span className="size-4 rounded-full border border-black/5" style={{ backgroundColor: color }} />
           </button>
@@ -632,8 +683,8 @@ export function LineStyleControls({
         <div ref={colorPickerRef} className="relative">
           <button
             type="button"
-            aria-label={labels.customColor}
-            title={labels.customColor}
+            aria-label={labels.customColor[colorTarget]}
+            title={labels.customColor[colorTarget]}
             className={cn(
               'flex size-7 items-center justify-center rounded-full border bg-white text-slate-600 transition',
               isColorPickerOpen ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300',
@@ -645,19 +696,19 @@ export function LineStyleControls({
 
           {isColorPickerOpen ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <HexColorPicker color={normalizedStroke} onChange={(color) => onChange({ stroke: color })} />
+              <HexColorPicker color={normalizedActiveColor} onChange={emitColorChange} />
               <div className="mt-3 flex items-center gap-2">
                 <span
                   className="size-8 rounded-lg border border-slate-200"
-                  style={{ backgroundColor: normalizedStroke }}
+                  style={{ backgroundColor: normalizedActiveColor }}
                   aria-hidden
                 />
                 <HexColorInput
-                  aria-label={labels.customColorHex}
-                  color={normalizedStroke}
+                  aria-label={labels.customColorHex[colorTarget]}
+                  color={normalizedActiveColor}
                   prefixed
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400"
-                  onChange={(color) => onChange({ stroke: normalizeHexColor(color) })}
+                  onChange={(color) => emitColorChange(normalizeHexColor(color))}
                 />
               </div>
             </div>
