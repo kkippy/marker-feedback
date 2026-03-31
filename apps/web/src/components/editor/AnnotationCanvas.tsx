@@ -134,7 +134,7 @@ const fitImage = (imageWidth: number, imageHeight: number, maxWidth: number, max
 
 const getDefaultStyle = (tool: Annotation['tool']) =>
   tool === 'highlight'
-    ? { stroke: '#f59e0b', fill: 'rgba(251,191,36,0.25)', strokeWidth: 3 }
+    ? { ...getLinkedHighlightColorStyle('#fbbf24'), strokeWidth: 3 }
     : tool === 'blur'
       ? { stroke: '#0f172a', fill: 'rgba(15,23,42,0.45)', strokeWidth: 2 }
         : tool === 'line'
@@ -201,6 +201,38 @@ const hexToRgba = (value: string, alpha: number) => {
   const blue = Number.parseInt(normalized.slice(5, 7), 16);
 
   return `rgba(${red},${green},${blue},${alpha})`;
+};
+
+const normalizeHighlightBaseColor = (value: string | undefined) => {
+  if (!value) {
+    return '#000000';
+  }
+
+  if (value.startsWith('#')) {
+    return normalizeHexColorValue(value);
+  }
+
+  const rgbMatch = value.match(/rgba?\(([^)]+)\)/i);
+
+  if (!rgbMatch) {
+    return '#000000';
+  }
+
+  const channels = rgbMatch[1]
+    .split(',')
+    .slice(0, 3)
+    .map((channel) => Math.max(0, Math.min(255, Number.parseInt(channel.trim(), 10) || 0)));
+
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+};
+
+const getLinkedHighlightColorStyle = (value: string | undefined) => {
+  const baseColor = normalizeHighlightBaseColor(value);
+
+  return {
+    stroke: baseColor,
+    fill: hexToRgba(baseColor, HIGHLIGHT_FILL_ALPHA),
+  };
 };
 
 const buildAnnotation = (
@@ -913,7 +945,7 @@ export function AnnotationCanvas({
     }, imageExportBounds);
   }, [draft.annotations, imageBounds]);
   const exportCrop = useMemo(() => {
-    if (!draft.asset || !exportDocumentBounds) {
+    if (!draft.asset || !exportDocumentBounds || !imageBounds) {
       return null;
     }
 
@@ -2663,10 +2695,15 @@ export function AnnotationCanvas({
         return;
       }
 
+      const linkedHighlightColorStyle =
+        patch.fill || patch.stroke
+          ? getLinkedHighlightColorStyle(patch.fill ?? patch.stroke)
+          : null;
+
       current.style = {
         ...current.style,
         ...patch,
-        fill: patch.fill ? hexToRgba(patch.fill, HIGHLIGHT_FILL_ALPHA) : current.style.fill,
+        ...(linkedHighlightColorStyle ?? {}),
       };
     });
   }, [editingRectangleAnnotation, updateAnnotation]);
