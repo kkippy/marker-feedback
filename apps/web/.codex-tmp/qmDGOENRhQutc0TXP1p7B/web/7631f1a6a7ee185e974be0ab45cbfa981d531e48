@@ -1,0 +1,50 @@
+__vite_ssr_exportName__("ToolbarIconButton", () => { try { return ToolbarIconButton } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/@fs/C:/Users/李文博/Desktop/marker-feedback/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/src/components/ui/button.tsx", {"importedNames":["Button"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/src/lib/utils.ts", {"importedNames":["cn"]});
+
+
+
+function ToolbarIconButton({
+  label,
+  children,
+  className,
+  ...props
+}) {
+  return /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)("div", { className: "group relative", children: [
+    /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)(
+      (0,__vite_ssr_import_1__.Button),
+      {
+        type: "button",
+        "aria-label": label,
+        className: (0,__vite_ssr_import_2__.cn)("h-10 min-w-11 rounded-xl px-3", className),
+        ...props,
+        children
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/ui/toolbar-icon-button.tsx",
+        lineNumber: 16,
+        columnNumber: 7
+      },
+      this
+    ),
+    /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)("div", { className: "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100", children: /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)("div", { className: "rounded-xl border border-slate-200/70 bg-white/96 px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-[0_12px_28px_rgba(15,23,42,0.12)] backdrop-blur whitespace-nowrap", children: label }, void 0, false, {
+      fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/ui/toolbar-icon-button.tsx",
+      lineNumber: 26,
+      columnNumber: 9
+    }, this) }, void 0, false, {
+      fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/ui/toolbar-icon-button.tsx",
+      lineNumber: 25,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/ui/toolbar-icon-button.tsx",
+    lineNumber: 15,
+    columnNumber: 5
+  }, this);
+}
+
+//# sourceMappingSource=vite-node
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IjtBQWVNO0FBZE47QUFDQTs7OztBQUVPLFNBQVMsa0JBQWtCO0FBQUEsRUFDaEM7QUFBQSxFQUNBO0FBQUEsRUFDQTtBQUFBLEVBQ0EsR0FBRztBQUNMLEdBR0c7QUFDRCxTQUNFLGlEQUFDLFNBQUksV0FBVSxrQkFDYjtBQUFBO0FBQUEsU0FBQztBQUFBO0FBQUEsUUFDQyxNQUFLO0FBQUEsUUFDTCxjQUFZO0FBQUEsUUFDWixjQUFXLDBCQUFHLGlDQUFpQyxTQUFTO0FBQUEsUUFDdkQsR0FBRztBQUFBLFFBRUg7QUFBQTtBQUFBLE1BTkg7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLElBT0E7QUFBQSxJQUVBLGlEQUFDLFNBQUksV0FBVSxtTUFDYiwyREFBQyxTQUFJLFdBQVUsK0tBQ1osbUJBREg7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQUVBLEtBSEY7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQUlBO0FBQUEsT0FkRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBZUE7QUFFSiIsIm5hbWVzIjpbXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsidG9vbGJhci1pY29uLWJ1dHRvbi50c3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHR5cGUgeyBCdXR0b25IVE1MQXR0cmlidXRlcywgUmVhY3ROb2RlIH0gZnJvbSAncmVhY3QnO1xuaW1wb3J0IHsgQnV0dG9uIH0gZnJvbSAnQC9jb21wb25lbnRzL3VpL2J1dHRvbic7XG5pbXBvcnQgeyBjbiB9IGZyb20gJ0AvbGliL3V0aWxzJztcblxuZXhwb3J0IGZ1bmN0aW9uIFRvb2xiYXJJY29uQnV0dG9uKHtcbiAgbGFiZWwsXG4gIGNoaWxkcmVuLFxuICBjbGFzc05hbWUsXG4gIC4uLnByb3BzXG59OiBCdXR0b25IVE1MQXR0cmlidXRlczxIVE1MQnV0dG9uRWxlbWVudD4gJiB7XG4gIGxhYmVsOiBzdHJpbmc7XG4gIGNoaWxkcmVuOiBSZWFjdE5vZGU7XG59KSB7XG4gIHJldHVybiAoXG4gICAgPGRpdiBjbGFzc05hbWU9XCJncm91cCByZWxhdGl2ZVwiPlxuICAgICAgPEJ1dHRvblxuICAgICAgICB0eXBlPVwiYnV0dG9uXCJcbiAgICAgICAgYXJpYS1sYWJlbD17bGFiZWx9XG4gICAgICAgIGNsYXNzTmFtZT17Y24oJ2gtMTAgbWluLXctMTEgcm91bmRlZC14bCBweC0zJywgY2xhc3NOYW1lKX1cbiAgICAgICAgey4uLnByb3BzfVxuICAgICAgPlxuICAgICAgICB7Y2hpbGRyZW59XG4gICAgICA8L0J1dHRvbj5cblxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJwb2ludGVyLWV2ZW50cy1ub25lIGFic29sdXRlIGxlZnQtMS8yIHRvcC1mdWxsIHotMjAgbXQtMiAtdHJhbnNsYXRlLXgtMS8yIG9wYWNpdHktMCB0cmFuc2l0aW9uLVtvcGFjaXR5LHRyYW5zZm9ybV0gZHVyYXRpb24tMTUwIGVhc2Utb3V0IGdyb3VwLWhvdmVyOm9wYWNpdHktMTAwIGdyb3VwLWZvY3VzLXdpdGhpbjpvcGFjaXR5LTEwMFwiPlxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInJvdW5kZWQteGwgYm9yZGVyIGJvcmRlci1zbGF0ZS0yMDAvNzAgYmctd2hpdGUvOTYgcHgtMi41IHB5LTEuNSB0ZXh0LXhzIGZvbnQtbWVkaXVtIHRleHQtc2xhdGUtNzAwIHNoYWRvdy1bMF8xMnB4XzI4cHhfcmdiYSgxNSwyMyw0MiwwLjEyKV0gYmFja2Ryb3AtYmx1ciB3aGl0ZXNwYWNlLW5vd3JhcFwiPlxuICAgICAgICAgIHtsYWJlbH1cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgKTtcbn1cbiJdLCJmaWxlIjoiL3NyYy9jb21wb25lbnRzL3VpL3Rvb2xiYXItaWNvbi1idXR0b24udHN4In0=

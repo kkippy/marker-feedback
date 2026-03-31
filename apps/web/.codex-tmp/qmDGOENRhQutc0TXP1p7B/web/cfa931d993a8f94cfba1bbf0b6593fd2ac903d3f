@@ -1,0 +1,15 @@
+__vite_ssr_exportName__("Card", () => { try { return Card } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/@fs/C:/Users/李文博/Desktop/marker-feedback/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/src/lib/utils.ts", {"importedNames":["cn"]});
+
+
+function Card({ className, ...props }) {
+  return /* @__PURE__ */ (0,__vite_ssr_import_0__.jsxDEV)("div", { className: (0,__vite_ssr_import_1__.cn)("rounded-2xl border border-slate-200 bg-white shadow-soft", className), ...props }, void 0, false, {
+    fileName: "C:/Users/李文博/Desktop/marker-feedback/apps/web/src/components/ui/card.tsx",
+    lineNumber: 3,
+    columnNumber: 88
+  }, this);
+}
+
+//# sourceMappingSource=vite-node
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IjtBQUV1RjtBQUR2Rjs7O0FBQ08sU0FBUyxLQUFLLEVBQUUsV0FBVyxHQUFHLE1BQU0sR0FBbUM7QUFBRSxTQUFPLGlEQUFDLFNBQUksY0FBVywwQkFBRyw0REFBNEQsU0FBUyxHQUFJLEdBQUcsU0FBL0Y7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQUFzRztBQUFJIiwibmFtZXMiOltdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJjYXJkLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgdHlwZSB7IEhUTUxBdHRyaWJ1dGVzIH0gZnJvbSAncmVhY3QnO1xuaW1wb3J0IHsgY24gfSBmcm9tICdAL2xpYi91dGlscyc7XG5leHBvcnQgZnVuY3Rpb24gQ2FyZCh7IGNsYXNzTmFtZSwgLi4ucHJvcHMgfTogSFRNTEF0dHJpYnV0ZXM8SFRNTERpdkVsZW1lbnQ+KSB7IHJldHVybiA8ZGl2IGNsYXNzTmFtZT17Y24oJ3JvdW5kZWQtMnhsIGJvcmRlciBib3JkZXItc2xhdGUtMjAwIGJnLXdoaXRlIHNoYWRvdy1zb2Z0JywgY2xhc3NOYW1lKX0gey4uLnByb3BzfSAvPjsgfVxuIl0sImZpbGUiOiIvc3JjL2NvbXBvbmVudHMvdWkvY2FyZC50c3gifQ==

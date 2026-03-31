@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createId, type EditorDraft, type ImageAsset } from '@marker/shared';
 import { FolderOpen, ImageUp, Redo2, Undo2 } from 'lucide-react';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
 import { getBootstrapPayload } from '@/lib/bootstrap';
-import { downloadDataUrl } from '@/lib/export';
+import { buildExportFileName, downloadDataUrl } from '@/lib/export';
 import { useLocale } from '@/lib/locale';
 import { createShare, listDraftPreviews, loadDraft, saveDraft } from '@/lib/persistence';
 import { createEmptyDraft, useEditorStore } from '@/lib/useEditorStore';
@@ -29,7 +29,7 @@ export function EditorPage() {
   const [draftPreviews, setDraftPreviews] = useState<
     { id: string; updatedAt: string; annotationCount: number; hasAsset: boolean }[]
   >([]);
-  const [exporter, setExporter] = useState<(() => string | undefined) | null>(null);
+  const exporterRef = useRef<(() => Promise<string | undefined>) | null>(null);
   const draft = useEditorStore((state) => state.draft);
   const activeTool = useEditorStore((state) => state.activeTool);
   const zoom = useEditorStore((state) => state.zoom);
@@ -75,6 +75,10 @@ export function EditorPage() {
 
     bootstrap();
   }, [setDraft]);
+
+  const handleExportReady = useCallback((nextExporter: () => Promise<string | undefined>) => {
+    exporterRef.current = nextExporter;
+  }, []);
 
   const openFilePicker = () => fileRef.current?.click();
 
@@ -147,11 +151,11 @@ export function EditorPage() {
             const share = await createShare(draft);
             navigate(`/share/${share.shareToken}`);
           }}
-          onExport={() => {
-            const png = exporter?.();
+          onExport={async () => {
+            const png = await exporterRef.current?.();
 
             if (png) {
-              downloadDataUrl(png, 'annotated-feedback.png');
+              downloadDataUrl(png, buildExportFileName());
             }
           }}
           onReset={() => resetDraft()}
@@ -237,7 +241,7 @@ export function EditorPage() {
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1">
-              <AnnotationCanvas onExportReady={setExporter} />
+              <AnnotationCanvas onExportReady={handleExportReady} />
             </div>
             <input
               ref={fileRef}

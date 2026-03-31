@@ -536,6 +536,106 @@ const getImageCalloutBounds = (geometry: ImageCalloutGeometry) => {
   };
 };
 
+interface ExportBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const expandBounds = (bounds: ExportBounds, padding: number): ExportBounds => ({
+  x: bounds.x - padding,
+  y: bounds.y - padding,
+  width: bounds.width + padding * 2,
+  height: bounds.height + padding * 2,
+});
+
+const unionBounds = (left: ExportBounds, right: ExportBounds): ExportBounds => {
+  const minX = Math.min(left.x, right.x);
+  const minY = Math.min(left.y, right.y);
+  const maxX = Math.max(left.x + left.width, right.x + right.width);
+  const maxY = Math.max(left.y + left.height, right.y + right.height);
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+};
+
+const getAnnotationExportBounds = (annotation: Annotation): ExportBounds | null => {
+  const strokeWidth = annotation.style.strokeWidth ?? 0;
+  const strokePadding = Math.max(4, strokeWidth / 2);
+
+  switch (annotation.tool) {
+    case 'rectangle':
+    case 'highlight':
+    case 'blur':
+      if (annotation.geometry.kind !== 'rect') {
+        return null;
+      }
+
+      return expandBounds({
+        x: annotation.geometry.x,
+        y: annotation.geometry.y,
+        width: annotation.geometry.width,
+        height: annotation.geometry.height,
+      }, strokePadding);
+
+    case 'line':
+      if (annotation.geometry.kind !== 'line') {
+        return null;
+      }
+
+      return getLineBounds(annotation.geometry.points, Math.max(12, strokeWidth * 3));
+
+    case 'arrow':
+      if (annotation.geometry.kind !== 'arrow') {
+        return null;
+      }
+
+      return getLineBounds(annotation.geometry.points, Math.max(16, strokeWidth * 4));
+
+    case 'marker':
+      if (annotation.geometry.kind !== 'marker') {
+        return null;
+      }
+
+      return {
+        x: annotation.geometry.x - 16,
+        y: annotation.geometry.y - 16,
+        width: 32,
+        height: 32,
+      };
+
+    case 'text':
+      if (annotation.geometry.kind !== 'text') {
+        return null;
+      }
+
+      return {
+        x: annotation.geometry.x,
+        y: annotation.geometry.y,
+        width: annotation.geometry.width,
+        height: annotation.geometry.height,
+      };
+
+    case 'callout':
+      return annotation.geometry.kind === 'callout'
+        ? expandBounds(getCalloutBounds(annotation.geometry), strokePadding)
+        : null;
+
+    case 'image-callout':
+      return annotation.geometry.kind === 'image-callout'
+        ? expandBounds(getImageCalloutBounds(annotation.geometry), strokePadding)
+        : null;
+
+    default:
+      return null;
+  }
+};
+
 const getRelativeImageCalloutGeometry = (
   geometry: ImageCalloutGeometry,
   origin: { x: number; y: number },
@@ -614,7 +714,7 @@ export function AnnotationCanvas({
   onExportReady,
 }: {
   readOnly?: boolean;
-  onExportReady?: (exporter: () => string | undefined) => void;
+  onExportReady?: (exporter: () => Promise<string | undefined>) => void;
 }) {
   const { messages } = useLocale();
   const frameRef = useRef<HTMLDivElement>(null);
@@ -678,6 +778,7 @@ export function AnnotationCanvas({
   const [calloutColorToolbarReference, setCalloutColorToolbarReference] = useState<HTMLDivElement | null>(null);
   const [hoveredCalloutGroupId, setHoveredCalloutGroupId] = useState<string | null>(null);
   const [isDraggingCalloutGroup, setIsDraggingCalloutGroup] = useState(false);
+  const [isExportingPng, setIsExportingPng] = useState(false);
   const [draggingCalloutTargetFrame, setDraggingCalloutTargetFrame] = useState<{
     annotationId: string;
     target: RectGeometry;
@@ -693,6 +794,15 @@ export function AnnotationCanvas({
   const [pendingImageCalloutGeometry, setPendingImageCalloutGeometry] = useState<ImageCalloutGeometry | null>(null);
   const [scrollPosition, setScrollPosition] = useState({ left: 0, top: 0 });
   const [displayZoom, setDisplayZoom] = useState(zoom);
+  const exportAnimationFrameRef = useRef<number | null>(null);
+  const pendingExportRef = useRef<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    pixelRatio: number;
+    resolve: (png: string | undefined) => void;
+  } | null>(null);
   const documentOrigin = useMemo(
     () => ({
       x: (WORKSPACE_WIDTH - DOCUMENT_WIDTH) / 2,
@@ -758,6 +868,54 @@ export function AnnotationCanvas({
   );
   const layerOffsetX = WORKSPACE_PADDING;
   const layerOffsetY = WORKSPACE_PADDING;
+  const exportDocumentBounds = useMemo(() => {
+    if (!imageBounds) {
+      return null;
+    }
+
+    const imageExportBounds: ExportBounds = {
+      x: imageBounds.x,
+      y: imageBounds.y,
+      width: imageBounds.width,
+      height: imageBounds.height,
+    };
+
+    return draft.annotations.reduce<ExportBounds>((bounds, annotation) => {
+      const annotationBounds = getAnnotationExportBounds(annotation);
+      return annotationBounds ? unionBounds(bounds, annotationBounds) : bounds;
+    }, imageExportBounds);
+  }, [draft.annotations, imageBounds]);
+  const exportCrop = useMemo(() => {
+    if (!draft.asset || !exportDocumentBounds) {
+      return null;
+    }
+
+    const width = exportDocumentBounds.width * canvasScale;
+    const height = exportDocumentBounds.height * canvasScale;
+
+    if (width <= 0 || height <= 0) {
+      return null;
+    }
+
+    return {
+      x: layerOffsetX - scrollPosition.left + (documentPosition.x + exportDocumentBounds.x) * canvasScale,
+      y: layerOffsetY - scrollPosition.top + (documentPosition.y + exportDocumentBounds.y) * canvasScale,
+      width,
+      height,
+      pixelRatio: imageBounds.width > 0 ? draft.asset.width / (imageBounds.width * canvasScale) : 1,
+    };
+  }, [
+    canvasScale,
+    documentPosition.x,
+    documentPosition.y,
+    draft.asset,
+    exportDocumentBounds,
+    imageBounds?.width,
+    layerOffsetX,
+    layerOffsetY,
+    scrollPosition.left,
+    scrollPosition.top,
+  ]);
   const getViewportMetricsForZoom = useCallback((nextZoom: number): Omit<ViewportMetrics, 'scrollLeft' | 'scrollTop'> => {
     const nextCanvasScale = fitScale * nextZoom;
     const nextScaledWorkspaceWidth = Math.round(WORKSPACE_WIDTH * nextCanvasScale);
@@ -1746,16 +1904,53 @@ export function AnnotationCanvas({
   }, [clampScrollPosition, closeContextMenu, committedViewportMetrics, deleteAnnotationById, selectedAnnotationId]);
 
   useEffect(() => {
-    onExportReady?.(() =>
-      layerRef.current?.toDataURL({
-        x: layerOffsetX + documentPosition.x * canvasScale,
-        y: layerOffsetY + documentPosition.y * canvasScale,
-        width: DOCUMENT_WIDTH * canvasScale,
-        height: DOCUMENT_HEIGHT * canvasScale,
-        pixelRatio: canvasScale > 0 ? 2 / canvasScale : 2,
-      }),
-    );
-  }, [canvasScale, documentPosition.x, documentPosition.y, layerOffsetX, layerOffsetY, onExportReady]);
+    onExportReady?.(async () => {
+      if (!image || !layerRef.current || !exportCrop) {
+        return undefined;
+      }
+
+      return new Promise((resolve) => {
+        pendingExportRef.current = {
+          ...exportCrop,
+          resolve,
+        };
+        setIsExportingPng(true);
+      });
+    });
+  }, [exportCrop, image, onExportReady]);
+
+  useEffect(() => {
+    if (!isExportingPng || !pendingExportRef.current) {
+      return undefined;
+    }
+
+    exportAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      const pendingExport = pendingExportRef.current;
+
+      pendingExportRef.current = null;
+      exportAnimationFrameRef.current = null;
+
+      const png = pendingExport
+        ? layerRef.current?.toDataURL({
+            x: pendingExport.x,
+            y: pendingExport.y,
+            width: pendingExport.width,
+            height: pendingExport.height,
+            pixelRatio: pendingExport.pixelRatio,
+          })
+        : undefined;
+
+      pendingExport?.resolve(png);
+      setIsExportingPng(false);
+    });
+
+    return () => {
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+    };
+  }, [isExportingPng]);
 
   const getFramePosition = (clientX: number, clientY: number) => {
     const rect = frameRef.current?.getBoundingClientRect();
@@ -2718,7 +2913,7 @@ export function AnnotationCanvas({
   };
 
   const renderAnnotation = (annotation: Annotation, isPreview = false) => {
-    const selected = annotation.id === selectedAnnotationId;
+    const selected = !isExportingPng && annotation.id === selectedAnnotationId;
     const geometry = annotation.geometry;
     const commonProps = {
       onClick: () => {
@@ -2978,7 +3173,7 @@ export function AnnotationCanvas({
           return null;
         }
 
-        const isEditingRectangle = !readOnly && !isPreview && editingRectangleId === annotation.id;
+        const isEditingRectangle = !readOnly && !isPreview && !isExportingPng && editingRectangleId === annotation.id;
         const renderedRectangleGeometry =
           rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
         const rectangleStrokeWidth = annotation.style.strokeWidth ?? 3;
@@ -3051,7 +3246,7 @@ export function AnnotationCanvas({
         }
 
         const isEditingRectangle =
-          annotation.tool === 'highlight' && !readOnly && !isPreview && editingRectangleId === annotation.id;
+          annotation.tool === 'highlight' && !readOnly && !isPreview && !isExportingPng && editingRectangleId === annotation.id;
         const renderedRectangleGeometry =
           rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
 
@@ -3121,7 +3316,7 @@ export function AnnotationCanvas({
           lineEditPreview?.annotationId === annotation.id
             ? lineEditPreview.points
             : geometry.points;
-        const isEditingLine = !readOnly && !isPreview && editingLineId === annotation.id;
+        const isEditingLine = !readOnly && !isPreview && !isExportingPng && editingLineId === annotation.id;
         const dragOffset =
           lineDragPreview?.annotationId === annotation.id
             ? { x: lineDragPreview.dx, y: lineDragPreview.dy }
@@ -3340,7 +3535,7 @@ export function AnnotationCanvas({
           return null;
         }
 
-        const isEditingArrow = !readOnly && !isPreview && editingArrowId === annotation.id;
+        const isEditingArrow = !readOnly && !isPreview && !isExportingPng && editingArrowId === annotation.id;
         const arrowPoints =
           arrowEditPreview?.annotationId === annotation.id
             ? arrowEditPreview.points
@@ -3490,8 +3685,8 @@ export function AnnotationCanvas({
           return null;
         }
 
-        const isEditingCurrentText = inlineTextEditor?.annotationId === annotation.id;
-        const isHoveredCurrentText = hoveredTextAnnotationId === annotation.id;
+        const isEditingCurrentText = !isExportingPng && inlineTextEditor?.annotationId === annotation.id;
+        const isHoveredCurrentText = !isExportingPng && hoveredTextAnnotationId === annotation.id;
         const textBackgroundColor = annotation.style.textBackgroundColor ?? DEFAULT_TEXT_STYLE.textBackgroundColor;
         const textContentFrame = getTextContentFrame(geometry);
 
@@ -3573,7 +3768,7 @@ export function AnnotationCanvas({
           return null;
         }
 
-        const isEditingCurrentCallout = inlineTextEditor?.annotationId === annotation.id;
+        const isEditingCurrentCallout = !isExportingPng && inlineTextEditor?.annotationId === annotation.id;
         const renderedGeometry =
           isEditingCurrentCallout
             ? {
@@ -4131,8 +4326,8 @@ export function AnnotationCanvas({
                   ) : null}
                 </Group>
                 {draft.annotations.map((annotation) => renderAnnotation(annotation))}
-                {preview ? renderAnnotation(preview, true) : null}
-                {pendingInlineCalloutGeometry ? (
+                {isExportingPng || !preview ? null : renderAnnotation(preview, true)}
+                {isExportingPng || !pendingInlineCalloutGeometry ? null : (
                   <Group x={renderedDocumentPosition.x} y={renderedDocumentPosition.y}>
                     <Rect
                       x={pendingInlineCalloutGeometry.target.x}
@@ -4152,8 +4347,8 @@ export function AnnotationCanvas({
                       lineJoin="round"
                     />
                   </Group>
-                ) : null}
-                {pendingImageCalloutGeometry ? (
+                )}
+                {isExportingPng || !pendingImageCalloutGeometry ? null : (
                   <Group x={renderedDocumentPosition.x} y={renderedDocumentPosition.y}>
                     <Rect
                       x={pendingImageCalloutGeometry.target.x}
@@ -4197,7 +4392,7 @@ export function AnnotationCanvas({
                       align="center"
                     />
                   </Group>
-                ) : null}
+                )}
               </Layer>
             </Stage>
           </div>

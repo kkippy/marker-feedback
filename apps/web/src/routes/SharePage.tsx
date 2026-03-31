@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
@@ -6,7 +6,7 @@ import { CommentSidebar } from '@/components/editor/CommentSidebar';
 import { TopBar } from '@/components/editor/TopBar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { downloadDataUrl } from '@/lib/export';
+import { buildExportFileName, downloadDataUrl } from '@/lib/export';
 import { useLocale } from '@/lib/locale';
 import { getShare, syncShareDraft } from '@/lib/persistence';
 import { useEditorStore } from '@/lib/useEditorStore';
@@ -17,13 +17,17 @@ export function SharePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
-  const [exporter, setExporter] = useState<(() => string | undefined) | null>(null);
+  const exporterRef = useRef<(() => Promise<string | undefined>) | null>(null);
   const draft = useEditorStore((state) => state.draft);
   const setDraft = useEditorStore((state) => state.setDraft);
   const zoom = useEditorStore((state) => state.zoom);
   const zoomIn = useEditorStore((state) => state.zoomIn);
   const zoomOut = useEditorStore((state) => state.zoomOut);
   const resetDraft = useEditorStore((state) => state.resetDraft);
+
+  const handleExportReady = useCallback((nextExporter: () => Promise<string | undefined>) => {
+    exporterRef.current = nextExporter;
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -97,11 +101,11 @@ export function SharePage() {
           showCreateShare={false}
           onSaveDraft={() => {}}
           onCreateShare={() => {}}
-          onExport={() => {
-            const png = exporter?.();
+          onExport={async () => {
+            const png = await exporterRef.current?.();
 
             if (png) {
-              downloadDataUrl(png, `share-${token}.png`);
+              downloadDataUrl(png, buildExportFileName());
             }
           }}
           onReset={resetDraft}
@@ -123,7 +127,7 @@ export function SharePage() {
           </Card>
 
           <div className="mt-4 min-h-0 flex-1">
-            <AnnotationCanvas readOnly onExportReady={setExporter} />
+            <AnnotationCanvas readOnly onExportReady={handleExportReady} />
           </div>
         </div>
       </div>

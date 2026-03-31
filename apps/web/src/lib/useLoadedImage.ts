@@ -9,9 +9,30 @@ export const useLoadedImage = (src?: string) => {
       return;
     }
 
+    let isActive = true;
     const img = new window.Image();
-    img.onload = () => setImage(img);
+
+    if (!src.startsWith('data:') && !src.startsWith('blob:')) {
+      img.crossOrigin = 'anonymous';
+    }
+
+    img.onload = () => {
+      if (isActive) {
+        setImage(img);
+      }
+    };
+    img.onerror = () => {
+      if (isActive) {
+        setImage(null);
+      }
+    };
     img.src = src;
+
+    return () => {
+      isActive = false;
+      img.onload = null;
+      img.onerror = null;
+    };
   }, [src]);
 
   return image;
