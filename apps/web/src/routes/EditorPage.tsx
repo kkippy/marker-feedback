@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { createId, type EditorDraft, type ImageAsset } from '@marker/shared';
 import { FolderOpen, ImageUp, Redo2, Undo2 } from 'lucide-react';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
@@ -25,6 +25,7 @@ const measureImage = (imageDataUrl: string) =>
 export function EditorPage() {
   const { formatDateTime, messages } = useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [draftPreviews, setDraftPreviews] = useState<
     { id: string; updatedAt: string; annotationCount: number; hasAsset: boolean }[]
@@ -74,7 +75,7 @@ export function EditorPage() {
     };
 
     bootstrap();
-  }, [setDraft]);
+  }, [location.hash, location.search, setDraft]);
 
   const handleExportReady = useCallback((nextExporter: () => Promise<string | undefined>) => {
     exporterRef.current = nextExporter;
