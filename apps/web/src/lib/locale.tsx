@@ -79,6 +79,7 @@ export interface WebMessages {
     line: string;
     arrow: string;
     highlight: string;
+    blur: string;
     marker: string;
     calloutGroup?: string;
     callout: string;
@@ -92,6 +93,8 @@ export interface WebMessages {
   annotation: {
     textPromptTitle: string;
     textPromptDefault: string;
+    mosaicIntensity: string;
+    mosaicIntensityScrub: string;
   };
   share: {
     loading: string;
@@ -175,7 +178,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
         arrow: 'Arrow',
         highlight: 'Highlight',
         text: 'Text',
-        blur: 'Blur',
+        blur: 'Mosaic',
         marker: 'Marker',
         callout: 'Text Callout',
         'image-callout': 'Image Callout',
@@ -188,6 +191,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       line: 'Line',
       arrow: 'Arrow',
       highlight: 'Highlight',
+      blur: 'Mosaic',
       marker: 'Marker',
       calloutGroup: 'Callout',
       callout: 'Text callout',
@@ -201,6 +205,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
     annotation: {
       textPromptTitle: 'Text note',
       textPromptDefault: 'Add note',
+      mosaicIntensity: 'Mosaic intensity',
+      mosaicIntensityScrub: 'Drag left or right to adjust mosaic intensity',
     },
     share: {
       loading: 'Loading shared feedback...',
@@ -282,7 +288,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
         arrow: '箭头',
         highlight: '高亮',
         text: '文本',
-        blur: '模糊',
+        blur: '马赛克',
         marker: '编号',
         callout: '引出',
         'image-callout': '图引出',
@@ -295,6 +301,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       line: '直线',
       arrow: '箭头',
       highlight: '高亮',
+      blur: '马赛克',
       marker: '编号',
       callout: '引出区域',
       imageCallout: '图引出',
@@ -307,6 +314,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
     annotation: {
       textPromptTitle: '文本备注',
       textPromptDefault: '输入备注内容',
+      mosaicIntensity: '马赛克强度',
+      mosaicIntensityScrub: '左右拖动调整马赛克强度',
     },
     share: {
       loading: '正在加载分享反馈...',

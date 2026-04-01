@@ -6,6 +6,7 @@ const SINGLE_USE_CANVAS_TOOLS = new Set<AnnotationTool>([
   'polygon',
   'arrow',
   'highlight',
+  'blur',
   'marker',
 ]);
 

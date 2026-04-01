@@ -10,6 +10,7 @@ import {
   MousePointer2,
   PenTool,
   RefreshCw,
+  ScanSearch,
   ScanText,
   Square,
   Trash2,
@@ -24,6 +25,7 @@ export type ContextMenuActionId =
   | 'line'
   | 'arrow'
   | 'highlight'
+  | 'blur'
   | 'marker'
   | 'callout-group'
   | 'callout'
@@ -42,7 +44,7 @@ export interface ContextMenuItem {
   children?: ContextMenuItem[];
   tool?: Extract<
     AnnotationTool,
-    'rectangle' | 'polygon' | 'line' | 'arrow' | 'highlight' | 'marker' | 'text' | 'callout' | 'image-callout'
+    'rectangle' | 'polygon' | 'line' | 'arrow' | 'highlight' | 'blur' | 'marker' | 'text' | 'callout' | 'image-callout'
   >;
 }
 
@@ -57,6 +59,7 @@ export interface ContextMenuLabels {
   line: string;
   arrow: string;
   highlight: string;
+  blur: string;
   marker: string;
   calloutGroup?: string;
   callout: string;
@@ -75,6 +78,7 @@ const defaultLabels: ContextMenuLabels = {
   line: 'Line',
   arrow: 'Arrow',
   highlight: 'Highlight',
+  blur: 'Mosaic',
   marker: 'Marker',
   calloutGroup: 'Callout',
   callout: 'Text callout',
@@ -93,6 +97,7 @@ const getCreationItems = (labels: ContextMenuLabels): ContextMenuItem[] => [
   { id: 'line', label: labels.line, icon: Minus, tool: 'line' },
   { id: 'arrow', label: labels.arrow, icon: ArrowRight, tool: 'arrow' },
   { id: 'highlight', label: labels.highlight, icon: Highlighter, tool: 'highlight' },
+  { id: 'blur', label: labels.blur, icon: ScanSearch, tool: 'blur' },
   { id: 'marker', label: labels.marker, icon: Hash, tool: 'marker' },
   {
     id: 'callout-group',

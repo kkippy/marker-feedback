@@ -108,6 +108,7 @@ export interface AnnotationStyle {
   textOutlineColor?: string;
   textOutlineWidth?: number;
   textBoxMode?: 'auto' | 'manual';
+  mosaicCellSize?: number;
 }
 
 export interface Annotation {

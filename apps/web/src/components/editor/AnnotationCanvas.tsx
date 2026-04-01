@@ -37,9 +37,11 @@ import {
 } from './canvasZoomGesture';
 import { CanvasContextMenu } from './CanvasContextMenu';
 import { FloatingLineStyleToolbar } from './FloatingLineStyleToolbar';
+import { FloatingMosaicToolbar } from './FloatingMosaicToolbar';
 import { getContextMenuItems, type ContextMenuActionId } from './contextMenuItems';
 import { FloatingImageCalloutToolbar } from './FloatingImageCalloutToolbar';
 import { InlineTextEditor } from './InlineTextEditor';
+import { DEFAULT_MOSAIC_CELL_SIZE, getMosaicLayoutForRect, renderMosaicCanvas } from './mosaicCanvas';
 import {
   RECT_RESIZE_HANDLES,
   getRectEdgeHandleFrame,
@@ -67,6 +69,8 @@ const MIN_RECT_EDIT_WIDTH = 24;
 const MIN_RECT_EDIT_HEIGHT = 24;
 const MARKER_RADIUS = 16;
 const HIGHLIGHT_FILL_ALPHA = 0.25;
+const MOSAIC_BORDER_COLOR = 'rgba(255,255,255,0.58)';
+const MOSAIC_BORDER_WIDTH = 1;
 
 interface LineEditPreview {
   annotationId: string;
@@ -143,9 +147,14 @@ const getDefaultStyle = (tool: Annotation['tool']) =>
   tool === 'highlight'
     ? { ...getLinkedHighlightColorStyle('#fbbf24'), strokeWidth: 3 }
     : tool === 'polygon'
-      ? { ...getLinkedHighlightColorStyle('#2563eb'), strokeWidth: 3 }
+    ? { ...getLinkedHighlightColorStyle('#2563eb'), strokeWidth: 3 }
     : tool === 'blur'
-      ? { stroke: '#0f172a', fill: 'rgba(15,23,42,0.45)', strokeWidth: 2 }
+      ? {
+          stroke: '#0f172a',
+          fill: 'rgba(15,23,42,0.08)',
+          strokeWidth: 2,
+          mosaicCellSize: DEFAULT_MOSAIC_CELL_SIZE,
+        }
         : tool === 'line'
           ? {
               stroke: '#0f172a',
@@ -918,6 +927,7 @@ export function AnnotationCanvas({
   const [draggingPolygonVertexId, setDraggingPolygonVertexId] = useState<string | null>(null);
   const [rectangleEditPreview, setRectangleEditPreview] = useState<RectangleEditPreview | null>(null);
   const [lineToolbarReference, setLineToolbarReference] = useState<HTMLDivElement | null>(null);
+  const [mosaicToolbarReference, setMosaicToolbarReference] = useState<HTMLDivElement | null>(null);
   const [markerToolbarReference, setMarkerToolbarReference] = useState<HTMLDivElement | null>(null);
   const rectResizeDragStateRef = useRef<RectResizeDragState | null>(null);
   const [calloutColorToolbarReference, setCalloutColorToolbarReference] = useState<HTMLDivElement | null>(null);
@@ -1198,7 +1208,7 @@ export function AnnotationCanvas({
 
     const annotation = draft.annotations.find((item) => item.id === editingRectangleId);
     return annotation &&
-      (annotation.tool === 'rectangle' || annotation.tool === 'highlight') &&
+      (annotation.tool === 'rectangle' || annotation.tool === 'highlight' || annotation.tool === 'blur') &&
       annotation.geometry.kind === 'rect'
       ? annotation
       : null;
@@ -1345,6 +1355,61 @@ export function AnnotationCanvas({
     scrollPosition.left,
     scrollPosition.top,
   ]);
+  const mosaicAnnotationImages = useMemo(() => {
+    const renders = new Map<
+      string,
+      {
+        canvas: HTMLCanvasElement;
+        layout: NonNullable<ReturnType<typeof getMosaicLayoutForRect>>;
+      }
+    >();
+
+    if (!image || !imageBounds || !draft.asset) {
+      return renders;
+    }
+
+    const imageRect: RectGeometry = {
+      kind: 'rect',
+      x: imageBounds.x,
+      y: imageBounds.y,
+      width: imageBounds.width,
+      height: imageBounds.height,
+    };
+
+    for (const annotation of draft.annotations) {
+      if (annotation.tool !== 'blur' || annotation.geometry.kind !== 'rect') {
+        continue;
+      }
+
+      const layout = getMosaicLayoutForRect({
+        rect: annotation.geometry,
+        imageBounds: imageRect,
+        assetWidth: draft.asset.width,
+        assetHeight: draft.asset.height,
+      });
+
+      if (!layout) {
+        continue;
+      }
+
+      const canvas = renderMosaicCanvas({
+        source: image,
+        crop: {
+          x: layout.cropX,
+          y: layout.cropY,
+          width: layout.cropWidth,
+          height: layout.cropHeight,
+        },
+        cellSize: annotation.style.mosaicCellSize,
+      });
+
+      if (canvas) {
+        renders.set(annotation.id, { canvas, layout });
+      }
+    }
+
+    return renders;
+  }, [draft.annotations, draft.asset, image, imageBounds]);
   const selectedMarkerAnnotation = useMemo<Annotation | null>(() => {
     if (!selectedAnnotationId) {
       return null;
@@ -1358,7 +1423,9 @@ export function AnnotationCanvas({
       return null;
     }
 
-    const { x, y } = selectedMarkerAnnotation.geometry;
+    const { x, y } = selectedMarkerAnnotation.geometry.kind === 'marker'
+      ? selectedMarkerAnnotation.geometry
+      : { x: 0, y: 0 };
     const diameter = MARKER_RADIUS * 2;
 
     return {
@@ -3069,6 +3136,22 @@ export function AnnotationCanvas({
       };
     });
   }, [editingRectangleAnnotation, updateAnnotation]);
+  const updateEditingMosaicStyle = useCallback((cellSize: number) => {
+    if (!editingRectangleAnnotation) {
+      return;
+    }
+
+    updateAnnotation(editingRectangleAnnotation.id, (current) => {
+      if (current.tool !== 'blur' || current.geometry.kind !== 'rect') {
+        return;
+      }
+
+      current.style = {
+        ...current.style,
+        mosaicCellSize: cellSize,
+      };
+    });
+  }, [editingRectangleAnnotation, updateAnnotation]);
   const updateSelectedMarkerStyle = useCallback((patch: Partial<Annotation['style']>) => {
     if (!selectedMarkerAnnotation) {
       return;
@@ -3209,6 +3292,7 @@ export function AnnotationCanvas({
       actionId === 'line' ||
       actionId === 'arrow' ||
       actionId === 'highlight' ||
+      actionId === 'blur' ||
       actionId === 'marker' ||
       actionId === 'callout' ||
       actionId === 'image-callout'
@@ -3804,10 +3888,50 @@ export function AnnotationCanvas({
         }
 
         const isEditingRectangle =
-          annotation.tool === 'highlight' && !readOnly && !isPreview && !isExportingPng && editingRectangleId === annotation.id;
+          !readOnly && !isPreview && !isExportingPng && editingRectangleId === annotation.id;
         const canShowMoveCursor = !readOnly && activeTool === 'select' && !isPreview;
         const renderedRectangleGeometry =
           rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
+        const imageRect =
+          imageBounds && draft.asset
+            ? {
+                kind: 'rect' as const,
+                x: imageBounds.x,
+                y: imageBounds.y,
+                width: imageBounds.width,
+                height: imageBounds.height,
+              }
+            : null;
+        const previewMosaicLayout =
+          annotation.tool === 'blur' && image && imageRect && draft.asset
+            ? getMosaicLayoutForRect({
+                rect: renderedRectangleGeometry,
+                imageBounds: imageRect,
+                assetWidth: draft.asset.width,
+                assetHeight: draft.asset.height,
+              })
+            : null;
+        const previewMosaicCanvas =
+          annotation.tool === 'blur' && previewMosaicLayout && image
+            ? renderMosaicCanvas({
+                source: image,
+                crop: {
+                  x: previewMosaicLayout.cropX,
+                  y: previewMosaicLayout.cropY,
+                  width: previewMosaicLayout.cropWidth,
+                  height: previewMosaicLayout.cropHeight,
+                },
+                cellSize: annotation.style.mosaicCellSize,
+              })
+            : null;
+        const mosaicRender =
+          annotation.tool === 'blur'
+            ? isPreview
+              ? previewMosaicCanvas && previewMosaicLayout
+                ? { canvas: previewMosaicCanvas, layout: previewMosaicLayout }
+                : null
+              : mosaicAnnotationImages.get(annotation.id) ?? null
+            : null;
 
         return (
           <Group
@@ -3826,8 +3950,16 @@ export function AnnotationCanvas({
                 setCanvasCursor('');
               }
             }}
-            onDblClick={annotation.tool === 'highlight' ? () => startRectangleEditing(annotation.id) : undefined}
-            onDblTap={annotation.tool === 'highlight' ? () => startRectangleEditing(annotation.id) : undefined}
+            onDblClick={
+              annotation.tool === 'highlight' || annotation.tool === 'blur'
+                ? () => startRectangleEditing(annotation.id)
+                : undefined
+            }
+            onDblTap={
+              annotation.tool === 'highlight' || annotation.tool === 'blur'
+                ? () => startRectangleEditing(annotation.id)
+                : undefined
+            }
             onDragMove={(event) => {
               if (!isEditingRectangle) {
                 return;
@@ -3852,7 +3984,7 @@ export function AnnotationCanvas({
               });
             }}
           >
-            {isEditingRectangle ? (
+            {isEditingRectangle && annotation.tool !== 'blur' ? (
               <Rect
                 width={renderedRectangleGeometry.width}
                 height={renderedRectangleGeometry.height}
@@ -3863,12 +3995,30 @@ export function AnnotationCanvas({
                 listening={false}
               />
             ) : null}
+            {annotation.tool === 'blur' && mosaicRender ? (
+              <KonvaImage
+                image={mosaicRender.canvas}
+                x={mosaicRender.layout.drawX}
+                y={mosaicRender.layout.drawY}
+                width={mosaicRender.layout.drawWidth}
+                height={mosaicRender.layout.drawHeight}
+                listening={false}
+              />
+            ) : null}
             <Rect
               width={renderedRectangleGeometry.width}
               height={renderedRectangleGeometry.height}
-              stroke={annotation.style.stroke}
-              strokeWidth={annotation.style.strokeWidth ?? 2}
-              fill={annotation.style.fill}
+              stroke={
+                annotation.tool === 'blur'
+                  ? MOSAIC_BORDER_COLOR
+                  : annotation.style.stroke
+              }
+              strokeWidth={
+                annotation.tool === 'blur'
+                  ? MOSAIC_BORDER_WIDTH
+                  : (annotation.style.strokeWidth ?? 2)
+              }
+              fill={annotation.tool === 'blur' && mosaicRender ? 'rgba(255,255,255,0)' : annotation.style.fill}
               cornerRadius={8}
             />
             {isEditingRectangle ? renderRectResizeHandles(annotation.id, renderedRectangleGeometry, {
@@ -5292,7 +5442,7 @@ export function AnnotationCanvas({
         {(lineToolbarRect && editingLineAnnotation) ||
         (arrowToolbarRect && editingArrowAnnotation) ||
         (polygonToolbarRect && editingPolygonAnnotation) ||
-        rectangleToolbarRect && editingRectangleAnnotation ? (
+        (rectangleToolbarRect && editingRectangleAnnotation && editingRectangleAnnotation.tool !== 'blur') ? (
           <>
             <div
               ref={setLineToolbarReference}
@@ -5337,6 +5487,28 @@ export function AnnotationCanvas({
                   ? 'fill'
                   : 'stroke'
               }
+            />
+          </>
+        ) : null}
+        {rectangleToolbarRect && editingRectangleAnnotation?.tool === 'blur' ? (
+          <>
+            <div
+              ref={setMosaicToolbarReference}
+              className="pointer-events-none absolute"
+              style={{
+                left: rectangleToolbarRect.left,
+                top: rectangleToolbarRect.top,
+                width: rectangleToolbarRect.width,
+                height: rectangleToolbarRect.height,
+              }}
+            />
+            <FloatingMosaicToolbar
+              isOpen
+              reference={mosaicToolbarReference}
+              label={messages.annotation.mosaicIntensity}
+              scrubLabel={messages.annotation.mosaicIntensityScrub}
+              value={editingRectangleAnnotation.style.mosaicCellSize}
+              onChange={updateEditingMosaicStyle}
             />
           </>
         ) : null}
