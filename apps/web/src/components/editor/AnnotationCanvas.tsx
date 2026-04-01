@@ -65,6 +65,7 @@ const MAX_PENDING_WHEEL_DELTA = 360;
 const MAX_WHEEL_DELTA_APPLY_PER_FRAME = 84;
 const MIN_RECT_EDIT_WIDTH = 24;
 const MIN_RECT_EDIT_HEIGHT = 24;
+const MARKER_RADIUS = 16;
 const HIGHLIGHT_FILL_ALPHA = 0.25;
 
 interface LineEditPreview {
@@ -242,6 +243,36 @@ const getLinkedHighlightColorStyle = (value: string | undefined) => {
     fill: hexToRgba(baseColor, HIGHLIGHT_FILL_ALPHA),
   };
 };
+
+const getSrgbChannelLuminance = (channel: number) => {
+  const normalized = channel / 255;
+  return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+};
+
+const getRelativeLuminance = (value: string | undefined) => {
+  const normalized = normalizeHighlightBaseColor(value);
+  const red = Number.parseInt(normalized.slice(1, 3), 16);
+  const green = Number.parseInt(normalized.slice(3, 5), 16);
+  const blue = Number.parseInt(normalized.slice(5, 7), 16);
+
+  return (
+    0.2126 * getSrgbChannelLuminance(red) +
+    0.7152 * getSrgbChannelLuminance(green) +
+    0.0722 * getSrgbChannelLuminance(blue)
+  );
+};
+
+const getContrastRatio = (foreground: string, background: string | undefined) => {
+  const foregroundLuminance = getRelativeLuminance(foreground);
+  const backgroundLuminance = getRelativeLuminance(background);
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
+const getMarkerTextColor = (fill: string | undefined) =>
+  getContrastRatio('#334155', fill) >= getContrastRatio('#ffffff', fill) ? '#334155' : '#ffffff';
 
 const buildAnnotation = (
   tool: Annotation['tool'],
@@ -887,6 +918,7 @@ export function AnnotationCanvas({
   const [draggingPolygonVertexId, setDraggingPolygonVertexId] = useState<string | null>(null);
   const [rectangleEditPreview, setRectangleEditPreview] = useState<RectangleEditPreview | null>(null);
   const [lineToolbarReference, setLineToolbarReference] = useState<HTMLDivElement | null>(null);
+  const [markerToolbarReference, setMarkerToolbarReference] = useState<HTMLDivElement | null>(null);
   const rectResizeDragStateRef = useRef<RectResizeDragState | null>(null);
   const [calloutColorToolbarReference, setCalloutColorToolbarReference] = useState<HTMLDivElement | null>(null);
   const [hoveredCalloutGroupId, setHoveredCalloutGroupId] = useState<string | null>(null);
@@ -1312,6 +1344,39 @@ export function AnnotationCanvas({
     renderedDocumentPosition.y,
     scrollPosition.left,
     scrollPosition.top,
+  ]);
+  const selectedMarkerAnnotation = useMemo<Annotation | null>(() => {
+    if (!selectedAnnotationId) {
+      return null;
+    }
+
+    const annotation = draft.annotations.find((item) => item.id === selectedAnnotationId);
+    return annotation && annotation.tool === 'marker' && annotation.geometry.kind === 'marker' ? annotation : null;
+  }, [draft.annotations, selectedAnnotationId]);
+  const markerToolbarRect = useMemo(() => {
+    if (!selectedMarkerAnnotation || readOnly) {
+      return null;
+    }
+
+    const { x, y } = selectedMarkerAnnotation.geometry;
+    const diameter = MARKER_RADIUS * 2;
+
+    return {
+      left: layerOffsetX - scrollPosition.left + (renderedDocumentPosition.x + x - MARKER_RADIUS) * canvasScale,
+      top: layerOffsetY - scrollPosition.top + (renderedDocumentPosition.y + y - MARKER_RADIUS) * canvasScale,
+      width: diameter * canvasScale,
+      height: diameter * canvasScale,
+    };
+  }, [
+    canvasScale,
+    layerOffsetX,
+    layerOffsetY,
+    readOnly,
+    renderedDocumentPosition.x,
+    renderedDocumentPosition.y,
+    scrollPosition.left,
+    scrollPosition.top,
+    selectedMarkerAnnotation,
   ]);
   const embeddedAssetsById = useMemo(
     () => new Map(draft.embeddedAssets.map((asset) => [asset.id, asset])),
@@ -3004,6 +3069,22 @@ export function AnnotationCanvas({
       };
     });
   }, [editingRectangleAnnotation, updateAnnotation]);
+  const updateSelectedMarkerStyle = useCallback((patch: Partial<Annotation['style']>) => {
+    if (!selectedMarkerAnnotation) {
+      return;
+    }
+
+    updateAnnotation(selectedMarkerAnnotation.id, (current) => {
+      if (current.tool !== 'marker' || current.geometry.kind !== 'marker') {
+        return;
+      }
+
+      current.style = {
+        ...current.style,
+        ...patch,
+      };
+    });
+  }, [selectedMarkerAnnotation, updateAnnotation]);
   const commitRectGeometry = useCallback((annotationId: string, geometry: RectGeometry) => {
     updateAnnotation(annotationId, (current) => {
       if (current.geometry.kind !== 'rect') {
@@ -3630,6 +3711,7 @@ export function AnnotationCanvas({
         }
 
         const isEditingRectangle = !readOnly && !isPreview && !isExportingPng && editingRectangleId === annotation.id;
+        const canShowMoveCursor = !readOnly && activeTool === 'select' && !isPreview;
         const renderedRectangleGeometry =
           rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
         const rectangleStrokeWidth = annotation.style.strokeWidth ?? 3;
@@ -3644,6 +3726,16 @@ export function AnnotationCanvas({
             y={renderedDocumentPosition.y + renderedRectangleGeometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
             {...commonProps}
+            onMouseEnter={() => {
+              if (canShowMoveCursor) {
+                setCanvasCursor('move');
+              }
+            }}
+            onMouseLeave={() => {
+              if (canShowMoveCursor) {
+                setCanvasCursor('');
+              }
+            }}
             onDblClick={() => startRectangleEditing(annotation.id)}
             onDblTap={() => startRectangleEditing(annotation.id)}
             onDragMove={(event) => {
@@ -3713,6 +3805,7 @@ export function AnnotationCanvas({
 
         const isEditingRectangle =
           annotation.tool === 'highlight' && !readOnly && !isPreview && !isExportingPng && editingRectangleId === annotation.id;
+        const canShowMoveCursor = !readOnly && activeTool === 'select' && !isPreview;
         const renderedRectangleGeometry =
           rectangleEditPreview?.annotationId === annotation.id ? rectangleEditPreview.geometry : geometry;
 
@@ -3723,6 +3816,16 @@ export function AnnotationCanvas({
             y={renderedDocumentPosition.y + renderedRectangleGeometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
             {...commonProps}
+            onMouseEnter={() => {
+              if (canShowMoveCursor) {
+                setCanvasCursor('move');
+              }
+            }}
+            onMouseLeave={() => {
+              if (canShowMoveCursor) {
+                setCanvasCursor('');
+              }
+            }}
             onDblClick={annotation.tool === 'highlight' ? () => startRectangleEditing(annotation.id) : undefined}
             onDblTap={annotation.tool === 'highlight' ? () => startRectangleEditing(annotation.id) : undefined}
             onDragMove={(event) => {
@@ -3798,6 +3901,7 @@ export function AnnotationCanvas({
             ? { x: polygonDragPreview.dx, y: polygonDragPreview.dy }
             : { x: 0, y: 0 };
         const isDraggingPolygonVertex = draggingPolygonVertexId === annotation.id;
+        const canDragPolygon = !readOnly && activeTool === 'select' && !isPreview && !isDraggingPolygonVertex;
         const polygonStrokeWidth = annotation.style.strokeWidth ?? 3;
         const handleRadius = 6 / Math.max(canvasScale, 0.75);
         const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
@@ -3809,11 +3913,21 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + dragOffset.x}
             y={renderedDocumentPosition.y + dragOffset.y}
             {...commonProps}
-            draggable={isEditingPolygon && !isDraggingPolygonVertex}
+            draggable={canDragPolygon}
+            onMouseEnter={() => {
+              if (canDragPolygon) {
+                setCanvasCursor('move');
+              }
+            }}
+            onMouseLeave={() => {
+              if (canDragPolygon) {
+                setCanvasCursor('');
+              }
+            }}
             onDblClick={() => startPolygonEditing(annotation.id)}
             onDblTap={() => startPolygonEditing(annotation.id)}
             onDragMove={(event) => {
-              if (!isEditingPolygon || isDraggingPolygonVertex) {
+              if (!canDragPolygon || !isEditingPolygon) {
                 return;
               }
 
@@ -3825,7 +3939,7 @@ export function AnnotationCanvas({
               });
             }}
             onDragEnd={(event) => {
-              if (!isEditingPolygon || isDraggingPolygonVertex) {
+              if (!canDragPolygon) {
                 return;
               }
 
@@ -3949,6 +4063,7 @@ export function AnnotationCanvas({
           lineEndMarker !== 'none'
             ? getLineMarkerPoints(linePoints, 'end', lineEndMarker, lineStrokeWidth)
             : null;
+        const canDragLine = !readOnly && activeTool === 'select' && !isPreview && !isDraggingLineHandle;
 
         return (
           <Group
@@ -3956,11 +4071,21 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + dragOffset.x}
             y={renderedDocumentPosition.y + dragOffset.y}
             {...commonProps}
-            draggable={isEditingLine && !isDraggingLineHandle}
+            draggable={canDragLine}
+            onMouseEnter={() => {
+              if (canDragLine) {
+                setCanvasCursor('move');
+              }
+            }}
+            onMouseLeave={() => {
+              if (canDragLine) {
+                setCanvasCursor('');
+              }
+            }}
             onDblClick={() => startLineEditing(annotation.id)}
             onDblTap={() => startLineEditing(annotation.id)}
             onDragMove={(event) => {
-              if (!isEditingLine || isDraggingLineHandle) {
+              if (!canDragLine || !isEditingLine) {
                 return;
               }
 
@@ -3972,14 +4097,14 @@ export function AnnotationCanvas({
               });
             }}
             onDragEnd={(event) => {
-              if (!isEditingLine || isDraggingLineHandle) {
+              if (!canDragLine) {
                 return;
               }
 
               const pos = event.target.position();
               const dx = pos.x - renderedDocumentPosition.x;
               const dy = pos.y - renderedDocumentPosition.y;
-              const nextPoints = translateLinePoints(geometry.points, dx, dy);
+              const nextPoints = translateLinePoints(linePoints, dx, dy);
               event.target.position({
                 x: renderedDocumentPosition.x,
                 y: renderedDocumentPosition.y,
@@ -4160,6 +4285,7 @@ export function AnnotationCanvas({
         const handleRadius = 6 / Math.max(canvasScale, 0.75);
         const handleStrokeWidth = 2 / Math.max(canvasScale, 0.75);
         const handleHitStrokeWidth = 20 / Math.max(canvasScale, 0.75);
+        const canDragArrow = !readOnly && activeTool === 'select' && !isPreview && !isDraggingArrowHandle;
 
         return (
           <Group
@@ -4167,11 +4293,21 @@ export function AnnotationCanvas({
             x={renderedDocumentPosition.x + dragOffset.x}
             y={renderedDocumentPosition.y + dragOffset.y}
             {...commonProps}
-            draggable={isEditingArrow && !isDraggingArrowHandle}
+            draggable={canDragArrow}
+            onMouseEnter={() => {
+              if (canDragArrow) {
+                setCanvasCursor('move');
+              }
+            }}
+            onMouseLeave={() => {
+              if (canDragArrow) {
+                setCanvasCursor('');
+              }
+            }}
             onDblClick={() => startArrowEditing(annotation.id)}
             onDblTap={() => startArrowEditing(annotation.id)}
             onDragMove={(event) => {
-              if (!isEditingArrow || isDraggingArrowHandle) {
+              if (!canDragArrow || !isEditingArrow) {
                 return;
               }
 
@@ -4183,7 +4319,7 @@ export function AnnotationCanvas({
               });
             }}
             onDragEnd={(event) => {
-              if (!isEditingArrow || isDraggingArrowHandle) {
+              if (!canDragArrow) {
                 return;
               }
 
@@ -4265,6 +4401,10 @@ export function AnnotationCanvas({
           return null;
         }
 
+        const canShowMoveCursor = !readOnly && activeTool === 'select' && !isPreview;
+        const markerFill = annotation.style.fill ?? '#2563eb';
+        const markerTextColor = getMarkerTextColor(markerFill);
+
         return (
           <Group
             key={annotation.id}
@@ -4272,6 +4412,16 @@ export function AnnotationCanvas({
             y={renderedDocumentPosition.y + geometry.y}
             draggable={!readOnly && activeTool === 'select' && !isPreview}
             {...commonProps}
+            onMouseEnter={() => {
+              if (canShowMoveCursor) {
+                setCanvasCursor('move');
+              }
+            }}
+            onMouseLeave={() => {
+              if (canShowMoveCursor) {
+                setCanvasCursor('');
+              }
+            }}
             onDragEnd={(event) => {
               const pos = event.target.position();
               updateAnnotation(annotation.id, (current) => {
@@ -4285,8 +4435,24 @@ export function AnnotationCanvas({
               });
             }}
           >
-            <Circle radius={16} fill="#2563eb" stroke={selected ? '#0f172a' : '#ffffff'} strokeWidth={selected ? 3 : 2} />
-            <Text text={annotation.label ?? ''} x={-6} y={-8} fontStyle="bold" fill="#ffffff" />
+            <Circle
+              radius={MARKER_RADIUS}
+              fill={markerFill}
+              stroke={selected ? '#0f172a' : '#ffffff'}
+              strokeWidth={selected ? 3 : 2}
+            />
+            <Text
+              text={annotation.label ?? ''}
+              x={-MARKER_RADIUS}
+              y={-MARKER_RADIUS}
+              width={MARKER_RADIUS * 2}
+              height={MARKER_RADIUS * 2}
+              align="center"
+              verticalAlign="middle"
+              fontSize={18}
+              fontStyle="bold"
+              fill={markerTextColor}
+            />
           </Group>
         );
       }
@@ -4300,6 +4466,7 @@ export function AnnotationCanvas({
         const isHoveredCurrentText = !isExportingPng && hoveredTextAnnotationId === annotation.id;
         const textBackgroundColor = annotation.style.textBackgroundColor ?? DEFAULT_TEXT_STYLE.textBackgroundColor;
         const textContentFrame = getTextContentFrame(geometry);
+        const canShowMoveCursor = !readOnly && activeTool === 'select' && !isPreview && !isEditingCurrentText;
 
         return (
           <Group
@@ -4312,10 +4479,16 @@ export function AnnotationCanvas({
               if (!readOnly) {
                 setHoveredTextAnnotationId(annotation.id);
               }
+              if (canShowMoveCursor) {
+                setCanvasCursor('move');
+              }
             }}
             onMouseLeave={() => {
               if (hoveredTextAnnotationId === annotation.id) {
                 setHoveredTextAnnotationId(null);
+              }
+              if (canShowMoveCursor) {
+                setCanvasCursor('');
               }
             }}
             onDblClick={() => {
@@ -5164,6 +5337,30 @@ export function AnnotationCanvas({
                   ? 'fill'
                   : 'stroke'
               }
+            />
+          </>
+        ) : null}
+        {markerToolbarRect && selectedMarkerAnnotation && !readOnly && activeTool === 'select' ? (
+          <>
+            <div
+              ref={setMarkerToolbarReference}
+              className="pointer-events-none absolute"
+              style={{
+                left: markerToolbarRect.left,
+                top: markerToolbarRect.top,
+                width: markerToolbarRect.width,
+                height: markerToolbarRect.height,
+              }}
+            />
+            <FloatingLineStyleToolbar
+              isOpen
+              reference={markerToolbarReference}
+              style={selectedMarkerAnnotation.style}
+              onChange={updateSelectedMarkerStyle}
+              showMarkers={false}
+              showStrokeWidth={false}
+              showDash={false}
+              colorTarget="fill"
             />
           </>
         ) : null}
