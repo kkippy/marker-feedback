@@ -166,6 +166,35 @@ function MarkerPreview({
   );
 }
 
+function MarkerTooltip({
+  label,
+  placement = 'right',
+}: {
+  label: string;
+  placement?: 'top' | 'right';
+}) {
+  return (
+    <span
+      style={{
+        backgroundColor: 'rgba(2, 6, 23, 0.96)',
+        color: '#ffffff',
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.34)',
+      }}
+      className={cn(
+        'pointer-events-none absolute z-30 whitespace-nowrap rounded-xl border px-2.5 py-1.5 text-xs font-medium opacity-0 transition-all duration-150 ease-out',
+        placement === 'right'
+          ? 'left-full top-1/2 ml-2 -translate-y-1/2 translate-x-[-4px] group-hover:translate-x-0 group-focus-visible:translate-x-0'
+          : 'bottom-full left-1/2 mb-2 -translate-x-1/2 translate-y-[4px] group-hover:translate-y-0 group-focus-visible:translate-y-0',
+        'group-hover:opacity-100 group-focus-visible:opacity-100',
+      )}
+      aria-hidden
+    >
+      {label}
+    </span>
+  );
+}
+
 function MarkerDropdown({
   direction,
   menuLabel,
@@ -189,6 +218,7 @@ function MarkerDropdown({
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Partial<Record<MarkerStyle, HTMLButtonElement | null>>>({});
+  const currentOptionLabel = optionLabel(value);
 
   useEffect(() => {
     if (!isOpen) {
@@ -237,10 +267,9 @@ function MarkerDropdown({
     <div className="relative">
       <button
         type="button"
-        aria-label={menuLabel}
-        title={menuLabel}
+        aria-label={`${menuLabel}: ${currentOptionLabel}`}
         className={cn(
-          'flex h-8 items-center gap-0.5 rounded-full border px-2 text-slate-700 transition',
+          'group relative flex h-8 items-center gap-0.5 rounded-full border px-2 text-slate-700 transition',
           isOpen ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:border-slate-300',
         )}
         onPointerDown={(event) => {
@@ -250,6 +279,7 @@ function MarkerDropdown({
       >
         <MarkerPreview marker={value} direction={direction} active={isOpen} />
         <ChevronDown className="size-3.5" />
+        <MarkerTooltip label={currentOptionLabel} placement="top" />
       </button>
 
       {isOpen ? (
@@ -279,10 +309,9 @@ function MarkerDropdown({
                 }}
                 type="button"
                 aria-label={`${menuLabel}: ${optionLabel(option)}`}
-                title={`${menuLabel}: ${optionLabel(option)}`}
                 style={itemStyle}
                 className={cn(
-                  'relative flex size-11 items-center justify-center rounded-xl transition-[transform,background-color,color] duration-200 ease-out',
+                  'group relative flex size-11 items-center justify-center rounded-xl transition-[transform,background-color,color] duration-200 ease-out',
                   option === value ? 'bg-orange-400 text-white' : 'bg-white text-slate-600 hover:bg-slate-100',
                 )}
                 onPointerDown={(event) => {
@@ -301,6 +330,7 @@ function MarkerDropdown({
                 >
                   <MarkerPreview marker={option} direction={direction} active={option === value} />
                 </span>
+                <MarkerTooltip label={optionLabel(option)} />
               </button>
             );
           })}
@@ -583,8 +613,8 @@ export function LineStyleControls({
             } satisfies Record<ColorTarget, (color: string) => string>,
             markerOption: {
               none: '\u65e0',
-              arrow: '\u7bad\u5934',
-              bar: '\u7eb5\u6760',
+              arrow: '\u9510\u89d2\u7bad\u5934',
+              bar: 'T \u578b\u7aef\u70b9',
               dot: '\u5706\u70b9',
             } satisfies Record<MarkerStyle, string>,
           }
@@ -611,8 +641,8 @@ export function LineStyleControls({
             } satisfies Record<ColorTarget, (color: string) => string>,
             markerOption: {
               none: 'None',
-              arrow: 'Arrow',
-              bar: 'Bar',
+              arrow: 'Acute Arrow',
+              bar: 'T-Bar',
               dot: 'Dot',
             } satisfies Record<MarkerStyle, string>,
           },

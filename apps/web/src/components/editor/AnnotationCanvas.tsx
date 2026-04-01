@@ -361,8 +361,6 @@ const getLineMarkerPoints = (
   const vector = getLineEndpointVector(points, marker);
   const markerSize = Math.max(8, strokeWidth * 2.6);
   const barHalf = Math.max(5, strokeWidth * 1.4);
-  const arrowBaseX = vector.x + vector.unitX * markerSize;
-  const arrowBaseY = vector.y + vector.unitY * markerSize;
 
   switch (markerStyle) {
     case 'arrow':
@@ -373,8 +371,6 @@ const getLineMarkerPoints = (
         vector.y,
         vector.x - vector.normalX * markerSize * 0.7,
         vector.y - vector.normalY * markerSize * 0.7,
-        arrowBaseX,
-        arrowBaseY,
       ];
     case 'bar':
       return [
