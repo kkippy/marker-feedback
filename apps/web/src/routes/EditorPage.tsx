@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createId, type EditorDraft, type ImageAsset } from '@marker/shared';
-import { FolderOpen, ImageUp, Redo2, Undo2 } from 'lucide-react';
+import { ImageUp, Redo2, Undo2 } from 'lucide-react';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
 import { CommentSidebar } from '@/components/editor/CommentSidebar';
+import { EditorHomepage } from '@/components/editor/EditorHomepage';
 import { TopBar } from '@/components/editor/TopBar';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
 import { getBootstrapPayload } from '@/lib/bootstrap';
 import { buildExportFileName, downloadDataUrl } from '@/lib/export';
@@ -23,10 +22,12 @@ const measureImage = (imageDataUrl: string) =>
   });
 
 export function EditorPage() {
-  const { formatDateTime, messages } = useLocale();
+  const { messages } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
+  const draftRequestRef = useRef(0);
+  const draftPreviewRequestRef = useRef(0);
   const [draftPreviews, setDraftPreviews] = useState<
     { id: string; updatedAt: string; annotationCount: number; hasAsset: boolean }[]
   >([]);
@@ -43,17 +44,34 @@ export function EditorPage() {
   const redo = useEditorStore((state) => state.redo);
 
   useEffect(() => {
-    listDraftPreviews().then(setDraftPreviews);
+    return () => {
+      draftRequestRef.current += 1;
+      draftPreviewRequestRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    draftPreviewRequestRef.current += 1;
+    const requestId = draftPreviewRequestRef.current;
+
+    listDraftPreviews().then((nextDraftPreviews) => {
+      if (requestId === draftPreviewRequestRef.current) {
+        setDraftPreviews(nextDraftPreviews);
+      }
+    });
   }, [draft.updatedAt]);
 
   useEffect(() => {
+    draftRequestRef.current += 1;
+    const requestId = draftRequestRef.current;
+
     const bootstrap = async () => {
       const payload = getBootstrapPayload();
 
       if (payload.draftId) {
         const existingDraft = await loadDraft(payload.draftId === 'latest' ? 'latest' : payload.draftId);
 
-        if (existingDraft) {
+        if (requestId === draftRequestRef.current && existingDraft) {
           setDraft(existingDraft);
           return;
         }
@@ -61,6 +79,9 @@ export function EditorPage() {
 
       if (payload.imageDataUrl) {
         const dimensions = await measureImage(payload.imageDataUrl);
+        if (requestId !== draftRequestRef.current) {
+          return;
+        }
         const asset: ImageAsset = {
           id: createId('asset'),
           sourceType: payload.sourceType,
@@ -75,6 +96,12 @@ export function EditorPage() {
     };
 
     bootstrap();
+
+    return () => {
+      if (draftRequestRef.current === requestId) {
+        draftRequestRef.current += 1;
+      }
+    };
   }, [location.hash, location.search, setDraft]);
 
   const handleExportReady = useCallback((nextExporter: () => Promise<string | undefined>) => {
@@ -90,10 +117,17 @@ export function EditorPage() {
       return;
     }
 
+    event.target.value = '';
+    draftRequestRef.current += 1;
+    const requestId = draftRequestRef.current;
+
     const reader = new FileReader();
     reader.onload = async () => {
       const imageDataUrl = reader.result as string;
       const dimensions = await measureImage(imageDataUrl);
+      if (requestId !== draftRequestRef.current) {
+        return;
+      }
       const asset: ImageAsset = {
         id: createId('asset'),
         sourceType: 'upload',
@@ -110,149 +144,73 @@ export function EditorPage() {
   return (
     <div className="h-dvh overflow-hidden bg-slate-50 px-6 py-6 text-slate-900">
       <div className="mx-auto flex h-full max-w-[1600px] min-h-0 flex-col gap-6">
-        <TopBar
-          annotationCount={draft.annotations.length}
-          threadCount={draft.threads.length}
-          zoom={zoom}
-          activeTool={draft.asset ? activeTool : undefined}
-          discussionPanel={draft.asset ? <CommentSidebar /> : undefined}
-          secondaryActions={
-            draft.asset ? (
-              <>
-                <ToolbarIconButton
-                  label={messages.editor.undo}
-                  className="bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  onClick={undo}
-                >
-                  <Undo2 className="size-4" />
-                </ToolbarIconButton>
-                <ToolbarIconButton
-                  label={messages.editor.redo}
-                  className="bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  onClick={redo}
-                >
-                  <Redo2 className="size-4" />
-                </ToolbarIconButton>
-                <ToolbarIconButton
-                  label={messages.editor.replaceImage}
-                  className="bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  onClick={openFilePicker}
-                >
-                  <ImageUp className="size-4" />
-                </ToolbarIconButton>
-              </>
-            ) : undefined
-          }
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          onSaveDraft={async () => {
-            await saveDraft(draft);
-          }}
-          onCreateShare={async () => {
-            const share = await createShare(draft);
-            navigate(`/share/${share.shareToken}`);
-          }}
-          onExport={async () => {
-            const png = await exporterRef.current?.();
-
-            if (png) {
-              downloadDataUrl(png, buildExportFileName());
-            }
-          }}
-          onReset={() => resetDraft()}
-        />
-
         {!draft.asset ? (
-          <div className="min-h-0 overflow-auto">
-            <div className="grid gap-6 lg:grid-cols-[1.3fr,0.9fr]">
-              <Card className="space-y-4 p-8">
-                <div>
-                  <p className="text-sm font-semibold text-blue-600">{messages.editor.intakeEyebrow}</p>
-                  <h1 className="mt-2 text-balance text-3xl font-semibold text-slate-900">
-                    {messages.editor.intakeTitle}
-                  </h1>
-                  <p className="mt-3 max-w-2xl text-pretty text-slate-600">
-                    {messages.editor.intakeDescription}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <Button type="button" onClick={openFilePicker}>
-                    <ImageUp className="size-4" />
-                    {messages.editor.uploadImage}
-                  </Button>
-                  <Button
-                    type="button"
-                    className="bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    onClick={() => navigate('/editor?sourceType=draft&draftId=latest')}
-                  >
-                    <FolderOpen className="size-4" />
-                    {messages.editor.openLatestDraft}
-                  </Button>
-                </div>
-
-                <input
-                  ref={fileRef}
-                  className="hidden"
-                  type="file"
-                  accept="image/*"
-                  onChange={onFileChange}
-                />
-              </Card>
-
-              <Card className="space-y-4 p-6">
-                <div>
-                  <h2 className="text-balance text-lg font-semibold text-slate-900">
-                    {messages.editor.recentDraftsTitle}
-                  </h2>
-                  <p className="mt-1 text-pretty text-sm text-slate-500">
-                    {messages.editor.recentDraftsDescription}
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  {draftPreviews.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                      {messages.editor.noDrafts}
-                    </div>
-                  ) : (
-                    draftPreviews.map((preview) => (
-                      <button
-                        key={preview.id}
-                        type="button"
-                        onClick={() => navigate(`/editor?sourceType=draft&draftId=${preview.id}`)}
-                        className="w-full rounded-xl border border-slate-200 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-slate-900">{preview.id}</span>
-                          <span className="text-xs text-slate-500">
-                            {formatDateTime(preview.updatedAt)}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-600">
-                          {messages.editor.draftSummary(preview.annotationCount, preview.hasAsset)}
-                        </p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </Card>
-            </div>
+          <div data-testid="editor-homepage-shell" className="flex min-h-0 flex-1 overflow-hidden">
+            <EditorHomepage
+              latestDraft={draftPreviews[0] ?? null}
+              onUpload={openFilePicker}
+              onOpenLatestDraft={() => navigate('/editor?sourceType=draft&draftId=latest')}
+            />
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
+            <TopBar
+              annotationCount={draft.annotations.length}
+              threadCount={draft.threads.length}
+              zoom={zoom}
+              activeTool={draft.asset ? activeTool : undefined}
+              discussionPanel={draft.asset ? <CommentSidebar /> : undefined}
+              secondaryActions={
+                draft.asset ? (
+                  <>
+                    <ToolbarIconButton
+                      label={messages.editor.undo}
+                      className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      onClick={undo}
+                    >
+                      <Undo2 className="size-4" />
+                    </ToolbarIconButton>
+                    <ToolbarIconButton
+                      label={messages.editor.redo}
+                      className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      onClick={redo}
+                    >
+                      <Redo2 className="size-4" />
+                    </ToolbarIconButton>
+                    <ToolbarIconButton
+                      label={messages.editor.replaceImage}
+                      className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      onClick={openFilePicker}
+                    >
+                      <ImageUp className="size-4" />
+                    </ToolbarIconButton>
+                  </>
+                ) : undefined
+              }
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
+              onSaveDraft={async () => {
+                await saveDraft(draft);
+              }}
+              onCreateShare={async () => {
+                const share = await createShare(draft);
+                navigate(`/share/${share.shareToken}`);
+              }}
+              onExport={async () => {
+                const png = await exporterRef.current?.();
+
+                if (png) {
+                  downloadDataUrl(png, buildExportFileName());
+                }
+              }}
+              onReset={() => resetDraft()}
+            />
             <div className="min-h-0 flex-1">
               <AnnotationCanvas onExportReady={handleExportReady} />
             </div>
-            <input
-              ref={fileRef}
-              className="hidden"
-              type="file"
-              accept="image/*"
-              onChange={onFileChange}
-            />
           </div>
         )}
+        <input ref={fileRef} className="hidden" type="file" accept="image/*" onChange={onFileChange} />
       </div>
     </div>
   );

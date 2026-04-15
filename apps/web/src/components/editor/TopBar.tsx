@@ -5,10 +5,11 @@ import {
   type ReactNode,
 } from 'react';
 import type { AnnotationTool } from '@marker/shared';
+import { Download, MessageSquareMore, RotateCcw, Save, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
-import { localePreferences, useLocale, type LocalePreference } from '@/lib/locale';
-import { Download, MessageSquareMore, RotateCcw, Save, Share2, ChevronDown } from 'lucide-react';
+import { useLocale } from '@/lib/locale';
+import { LocalePreferenceButton } from './LocalePreferenceButton';
 
 function useDismissibleLayer<T extends HTMLElement>(isOpen: boolean, onClose: () => void) {
   const ref = useRef<T>(null);
@@ -29,61 +30,6 @@ function useDismissibleLayer<T extends HTMLElement>(isOpen: boolean, onClose: ()
   }, [isOpen, onClose]);
 
   return ref;
-}
-
-function LanguageMenu() {
-  const { messages, preference, setPreference } = useLocale();
-  const [isOpen, setIsOpen] = useState(false);
-  const rootRef = useDismissibleLayer<HTMLDivElement>(isOpen, () => setIsOpen(false));
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        aria-label={messages.language.selectAriaLabel}
-        className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-          isOpen
-            ? 'border-slate-300 bg-white text-slate-700'
-            : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white'
-        }`}
-        onClick={() => setIsOpen((current) => !current)}
-      >
-        <span className="text-slate-500">{messages.language.label}</span>
-        <span className="text-slate-700">{messages.language.options[preference]}</span>
-        <ChevronDown className={`size-4 text-slate-400 transition ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen ? (
-        <div className="absolute left-0 top-full z-20 mt-2 min-w-52 rounded-2xl border border-slate-200 bg-white/96 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.14)] backdrop-blur">
-          <div className="flex flex-col gap-1">
-            {localePreferences.map((option) => {
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  aria-label={messages.language.options[option]}
-                  className={`relative flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors duration-150 ease-out ${
-                    option === preference
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white text-slate-700 hover:bg-slate-100'
-                  }`}
-                  onClick={() => {
-                    setPreference(option);
-                    setIsOpen(false);
-                  }}
-                >
-                  <span className="relative z-10 text-xs">
-                    {messages.language.options[option]}
-                  </span>
-                  {option === preference ? <span className="relative z-10 text-xs text-white/80">•</span> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 function DiscussionPanel({
@@ -149,7 +95,7 @@ export function TopBar(props: {
         <Badge>{messages.topBar.threads(props.threadCount)}</Badge>
         <Badge>{messages.topBar.zoom(Math.round(props.zoom * 100))}</Badge>
 
-        <LanguageMenu />
+        <LocalePreferenceButton />
 
         {props.discussionPanel ? (
           <DiscussionPanel title={messages.comments.title} count={props.threadCount}>

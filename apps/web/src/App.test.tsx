@@ -29,7 +29,9 @@ describe('app routes', () => {
       </LocaleProvider>,
     );
 
-    expect(await screen.findByText('Start a feedback session')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /Make screenshot feedback\s*lighter\./ }),
+    ).toBeInTheDocument();
   });
 
   it('follows system language when navigator is Chinese', async () => {
@@ -43,6 +45,8 @@ describe('app routes', () => {
       </LocaleProvider>,
     );
 
-    expect(await screen.findByText('开始一轮反馈')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /\u8ba9\u622a\u56fe\u6c9f\u901a\uff0c\s*\u66f4\u8f7b\u677e\u3002/ }),
+    ).toBeInTheDocument();
   });
 });

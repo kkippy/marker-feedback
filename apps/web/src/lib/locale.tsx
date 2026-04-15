@@ -42,6 +42,18 @@ export interface WebMessages {
     intakeDescription: string;
     uploadImage: string;
     openLatestDraft: string;
+    homepageBrandLine: string;
+    homepageEyebrow: string;
+    homepageTitle: string;
+    homepageDescription: string;
+    homepageUploadImage: string;
+    homepageOpenLatestDraft: string;
+    homepageHint: string;
+    homepageRecentTitle: string;
+    homepageRecentSummary: string;
+    homepageRecentContinue: string;
+    homepageRecentEmpty: string;
+    homepageDraftEmpty: string;
     recentDraftsTitle: string;
     recentDraftsDescription: string;
     noDrafts: string;
@@ -141,6 +153,19 @@ const messages: Record<SupportedLocale, WebMessages> = {
         'Upload a local image, open the latest draft, or jump in from the extension with the current tab capture.',
       uploadImage: 'Upload image',
       openLatestDraft: 'Open latest draft',
+      homepageBrandLine: 'Make visual feedback feel more natural',
+      homepageEyebrow: 'Upload a screenshot to start',
+      homepageTitle: 'Make screenshot feedback lighter.',
+      homepageDescription: 'Keep ideas on the image, and let feedback flow more naturally.',
+      homepageUploadImage: 'Upload image and start',
+      homepageOpenLatestDraft: 'Open latest draft',
+      homepageHint: 'Upload a local image, or continue the feedback you left unfinished.',
+      homepageRecentTitle: 'Recent project',
+      homepageRecentSummary: 'Continue from where you left off.',
+      homepageRecentContinue: 'Continue this project',
+      homepageRecentEmpty:
+        'No recent project yet. Starting from a single screenshot is a good place to begin.',
+      homepageDraftEmpty: 'No draft yet. Your progress will be kept after you upload an image.',
       recentDraftsTitle: 'Recent drafts',
       recentDraftsDescription: 'Resume previous work without re-uploading your screenshot.',
       noDrafts: 'No drafts yet.',
@@ -252,6 +277,18 @@ const messages: Record<SupportedLocale, WebMessages> = {
         '上传本地图片、打开最近草稿，或由扩展携带当前标签页截图直接进入。',
       uploadImage: '上传图片',
       openLatestDraft: '打开最新草稿',
+      homepageBrandLine: '让视觉反馈更自然地发生',
+      homepageEyebrow: '上传截图，即可开始',
+      homepageTitle: '让截图沟通，更轻松。',
+      homepageDescription: '把想法留在画面上，让反馈更自然地被看见。',
+      homepageUploadImage: '上传图片并开始',
+      homepageOpenLatestDraft: '打开最近草稿',
+      homepageHint: '支持本地图片上传，也可继续最近一次未完成的反馈。',
+      homepageRecentTitle: '最近项目',
+      homepageRecentSummary: '从上一次停下的地方继续。',
+      homepageRecentContinue: '继续这个项目',
+      homepageRecentEmpty: '还没有最近项目，从一张截图开始也很好。',
+      homepageDraftEmpty: '还没有草稿，上传图片后会自动保留你的进度。',
       recentDraftsTitle: '最近草稿',
       recentDraftsDescription: '无需重新上传图片，继续之前的编辑。',
       noDrafts: '还没有草稿。',
