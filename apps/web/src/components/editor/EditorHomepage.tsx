@@ -1,174 +1,282 @@
+import { LocalePreferenceButton } from '@/components/editor/LocalePreferenceButton';
 import { useLocale } from '@/lib/locale';
-import { HomepageHeroMotion } from './HomepageHeroMotion';
-import { LocalePreferenceButton } from './LocalePreferenceButton';
 
-export type HomepageDraftPreview = {
+export interface HomepageDraftPreview {
   id: string;
   updatedAt: string;
   annotationCount: number;
   hasAsset: boolean;
-};
+}
 
-export function EditorHomepage(props: {
+interface EditorHomepageProps {
   latestDraft: HomepageDraftPreview | null;
   onUpload: () => void;
   onOpenLatestDraft: () => void;
-}) {
-  const { formatDateTime, locale, messages } = useLocale();
-  const hasLatestDraft = Boolean(props.latestDraft);
-  const canContinueLatestDraft = Boolean(props.latestDraft?.hasAsset);
-  const recentSummaryId = 'editor-homepage-recent-summary';
+}
+
+const homepageCopy = {
+  en: {
+    brandLine: 'Visual Communication',
+    titleStart: 'Make screenshot communication',
+    titleAccent: 'feel intuitive.',
+    description:
+      'Keep ideas on the image, let feedback be seen more naturally, and sync smoothly across devices.',
+    latest: 'Latest',
+    latestTitle: 'Homepage visual refinement',
+    fallbackDate: '2026/04/16',
+    continue: 'Continue this project',
+    activeProjects: 'Recent active projects',
+    newMessages: '2 New Messages',
+    previewTag: 'Multi-project workbench',
+    tileTitle: 'Component detail review',
+    tileTime: '10:20 AM',
+    newProject: '＋ New',
+    socialProof: 'Join 10k+ creators',
+  },
+  'zh-CN': {
+    brandLine: 'Visual Communication',
+    titleStart: '让截图沟通，',
+    titleAccent: '更具直觉。',
+    description: '把想法留在画面上，让反馈更自然地被看见。支持多终端无缝同步。',
+    latest: 'Latest',
+    latestTitle: '首页视觉优化讨论',
+    fallbackDate: '2026/04/16',
+    continue: '继续这个项目',
+    activeProjects: '最近活跃项目',
+    newMessages: '2 New Messages',
+    previewTag: '多项目工作台',
+    tileTitle: '组件细节走查',
+    tileTime: '10:20 AM',
+    newProject: '＋ 新建',
+    socialProof: 'Join 10k+ creators',
+  },
+} as const;
+
+function PlusIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path
+        data-testid="homepage-folder-back"
+        className="mf-homepage-folder-back"
+        d="M4.5 8.1V6.9a2 2 0 0 1 2-2h4.2l1.8 2.35H18a2 2 0 0 1 2 2v1.2H5.1z"
+      />
+      <path
+        data-testid="homepage-folder-front-closed"
+        className="mf-homepage-folder-front-closed"
+        d="M4 9.35h16v7.65a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+      />
+      <path
+        data-testid="homepage-folder-front-open"
+        className="mf-homepage-folder-front-open"
+        d="M5.1 11.15h15.3l-2.1 7.85H5.8a2 2 0 0 1-1.95-2.45z"
+      />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function MessagesIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-5 4v-4.5z" />
+    </svg>
+  );
+}
+
+function LayersIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="m12 4 8 4-8 4-8-4z" />
+      <path d="m4 12 8 4 8-4" />
+      <path d="m4 16 8 4 8-4" />
+    </svg>
+  );
+}
+
+function CursorIcon() {
+  return (
+    <svg className="mf-homepage-cursor" aria-hidden="true" viewBox="0 0 24 24">
+      <path d="m5 3 13 9-6 1 1 6-2 1-3-7-3 1z" />
+    </svg>
+  );
+}
+
+function RulerMarks() {
+  return (
+    <>
+      {Array.from({ length: 20 }, (_, index) => (
+        <i key={index} />
+      ))}
+    </>
+  );
+}
+
+export function EditorHomepage({ latestDraft, onUpload, onOpenLatestDraft }: EditorHomepageProps) {
+  const { locale, messages, formatDateTime } = useLocale();
+  const copy = homepageCopy[locale];
+  const canOpenLatestDraft = Boolean(latestDraft?.hasAsset);
+  const latestDate = latestDraft ? formatDateTime(latestDraft.updatedAt) : copy.fallbackDate;
 
   return (
-    <section
-      aria-labelledby="editor-homepage-title"
-      data-testid="editor-homepage-root"
-      className="relative flex h-full min-h-full w-full flex-col overflow-hidden rounded-[38px] border border-[#d8e5f7] bg-[radial-gradient(circle_at_12%_10%,rgba(191,219,254,0.46),transparent_26%),radial-gradient(circle_at_88%_14%,rgba(224,242,254,0.74),transparent_28%),linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)] text-slate-900 shadow-[0_24px_80px_rgba(91,132,185,0.16)]"
-    >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.82),transparent_46%),radial-gradient(circle_at_15%_54%,rgba(147,197,253,0.14),transparent_34%),radial-gradient(circle_at_84%_32%,rgba(186,230,253,0.14),transparent_28%)]" />
-
-      <div className="relative z-[1] mx-auto flex h-full min-h-0 w-full max-w-[1560px] flex-1 flex-col px-6 py-6 md:px-10 md:py-8 xl:px-14 xl:py-10">
-        <header className="flex items-start justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="flex size-[52px] shrink-0 items-center justify-center rounded-[18px] bg-gradient-to-br from-[#2d63ea] to-[#2f62dd] text-[15px] font-extrabold text-white shadow-[0_14px_30px_rgba(37,99,235,0.22)]">
-              M
-            </div>
-            <div className="min-w-0">
-              <strong className="block text-[20px] font-[800] tracking-[-0.04em] text-slate-900">
-                Marker Feedback
-              </strong>
-              <span className="mt-1 block text-[13px] leading-[1.45] text-[#7d8fac]">
-                {messages.editor.homepageBrandLine}
-              </span>
+    <main data-testid="editor-homepage-root" className="mf-homepage-root h-full min-h-full w-full">
+      <div data-testid="homepage-main-grid" className="mf-homepage-layout">
+        <section data-testid="homepage-hero-panel" className="mf-homepage-hero" aria-labelledby="homepage-title">
+          <div className="mf-homepage-brand">
+            <div className="mf-homepage-logo">M</div>
+            <div>
+              <h2>Marker Feedback</h2>
+              <p>{copy.brandLine}</p>
             </div>
           </div>
 
-          <LocalePreferenceButton variant="homepage" />
-        </header>
+          <div className="mf-homepage-intro">
+            <div className="mf-homepage-badge">✦ 2026 Version</div>
+            <h1 id="homepage-title" className="mf-homepage-title">
+              {copy.titleStart}
+              <br />
+              <span>{copy.titleAccent}</span>
+            </h1>
+            <p className="mf-homepage-desc">{copy.description}</p>
+          </div>
 
-        <div
-          data-testid="homepage-main-grid"
-          className="grid min-h-0 flex-1 items-stretch gap-5 pt-6 xl:grid-cols-[minmax(0,0.6fr)_minmax(380px,0.4fr)]"
-        >
-          <section
-            data-testid="homepage-left-hero"
-            className="relative min-h-[420px] overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.78)_0%,rgba(246,250,255,0.56)_100%)] px-8 py-8 shadow-[0_18px_54px_rgba(111,146,191,0.08)] backdrop-blur-xl md:px-10 xl:h-full xl:min-h-[640px] xl:px-12"
-          >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_16%,rgba(255,255,255,0.92),transparent_30%),linear-gradient(135deg,rgba(59,130,246,0.08)_0%,transparent_40%)]" />
-
-            <div className="relative z-[2] flex h-full max-w-[520px] flex-col justify-center gap-5 py-8 xl:gap-6 xl:py-10">
-              <span className="inline-flex h-10 w-fit items-center rounded-full border border-[#d9e7ff] bg-[linear-gradient(180deg,rgba(243,247,255,0.98)_0%,rgba(231,240,255,0.96)_100%)] px-5 text-[13px] font-[760] tracking-[-0.02em] text-[#3266da] shadow-[0_8px_20px_rgba(84,125,193,0.08)]">
-                {messages.editor.homepageEyebrow}
+          <div className="mf-homepage-actions">
+            <button type="button" className="mf-homepage-btn mf-homepage-btn-primary" onClick={onUpload}>
+              {messages.editor.homepageUploadImage}
+              <PlusIcon />
+            </button>
+            <button
+              type="button"
+              className="mf-homepage-btn mf-homepage-btn-secondary"
+              disabled={!canOpenLatestDraft}
+              onClick={onOpenLatestDraft}
+            >
+              {locale === 'zh-CN' ? '最近草稿' : 'Recent drafts'}
+              <span data-testid="homepage-recent-drafts-icon" className="mf-homepage-btn-secondary-icon">
+                <FolderIcon />
               </span>
+            </button>
+          </div>
 
-              <h1
-                id="editor-homepage-title"
-                className={`text-slate-950 ${
-                  locale === 'zh-CN'
-                    ? 'max-w-[8.5ch] text-[56px] font-[820] leading-[1.08] tracking-[-0.06em] xl:text-[60px]'
-                    : 'max-w-[12ch] text-[48px] font-[820] leading-[1.08] tracking-[-0.055em] xl:text-[54px]'
-                }`}
-              >
-                {messages.editor.homepageTitle}
-              </h1>
+          <div className="mf-homepage-social">
+            <div className="mf-homepage-avatars" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+            <span>{copy.socialProof}</span>
+          </div>
+        </section>
 
-              <p
-                className={`text-[17px] leading-[1.75] text-[#586c8b] ${
-                  locale === 'zh-CN' ? 'max-w-[430px]' : 'max-w-[440px]'
-                }`}
-              >
-                {messages.editor.homepageDescription}
-              </p>
+        <section className="mf-homepage-stage-wrap" aria-label={copy.activeProjects}>
+          <div className="mf-homepage-lang">
+            <LocalePreferenceButton variant="homepage" />
+          </div>
 
-              <div data-testid="homepage-cta-row" className="flex flex-wrap gap-4 pt-2">
-                <button
-                  type="button"
-                  className="inline-flex h-[66px] items-center justify-center rounded-[20px] bg-gradient-to-br from-[#3068eb] to-[#2f5ddd] px-[28px] text-[15px] font-[780] tracking-[-0.02em] text-white shadow-[0_18px_34px_rgba(43,99,219,0.28)] transition hover:brightness-[1.03]"
-                  onClick={props.onUpload}
-                >
-                  {messages.editor.homepageUploadImage}
-                </button>
-                <button
-                  type="button"
-                  className={`inline-flex h-[66px] items-center justify-center rounded-[20px] border px-[28px] text-[15px] font-[760] tracking-[-0.02em] transition ${
-                    hasLatestDraft
-                      ? canContinueLatestDraft
-                        ? 'border-[#d7e6fb] bg-white/94 text-[#6e82a4] shadow-[0_10px_24px_rgba(132,166,217,0.08)] hover:border-[#c7daf8] hover:bg-white'
-                        : 'border-[#e1eaf7] bg-white/84 text-slate-400'
-                      : 'border-[#e1eaf7] bg-white/84 text-slate-400'
-                  }`}
-                  disabled={!canContinueLatestDraft}
-                  onClick={props.onOpenLatestDraft}
-                >
-                  {messages.editor.homepageOpenLatestDraft}
-                </button>
+          <div className="mf-homepage-card-shell">
+            <div data-testid="homepage-preview-ruler" className="mf-homepage-ruler" aria-hidden="true">
+              <RulerMarks />
+            </div>
+
+            <div className="mf-homepage-back-layer" aria-hidden="true" />
+
+            <article data-testid="homepage-workbench-panel" className="mf-homepage-main-card">
+              <div className="mf-homepage-card-head">
+                <div data-testid="homepage-latest-project-card" className="mf-homepage-head-row">
+                  <div className="mf-homepage-meta">
+                    <div className="mf-homepage-meta-line">
+                      <span className="mf-homepage-latest">{copy.latest}</span>
+                      <h3>{canOpenLatestDraft ? copy.latestTitle : messages.editor.homepageRecentEmpty}</h3>
+                    </div>
+                    <p>{canOpenLatestDraft ? latestDate : messages.editor.homepageDraftEmpty}</p>
+                  </div>
+                  {canOpenLatestDraft ? (
+                    <button
+                      type="button"
+                      className={`mf-homepage-continue${locale === 'en' ? ' mf-homepage-continue-wide' : ''}`}
+                      onClick={onOpenLatestDraft}
+                    >
+                      <span data-testid="homepage-continue-label" className="mf-homepage-continue-label">
+                        {copy.continue}
+                      </span>
+                      <ArrowIcon />
+                    </button>
+                  ) : null}
+                </div>
+
+                <div data-testid="homepage-preview-stage" className="mf-homepage-preview">
+                  <div className="mf-homepage-depth-panel mf-homepage-depth-panel-back" aria-hidden="true" />
+                  <div className="mf-homepage-depth-panel mf-homepage-depth-panel-mid" aria-hidden="true" />
+                  <div data-testid="homepage-preview-workspace" className="mf-homepage-workspace">
+                    <div className="mf-homepage-top-dots" aria-hidden="true">
+                      <i />
+                      <i />
+                    </div>
+                    <div className="mf-homepage-line-sm" aria-hidden="true" />
+                    <div className="mf-homepage-message-stack" aria-hidden="true">
+                      <div className="mf-homepage-msg-left">
+                        <div className="mf-homepage-avatar-blue" />
+                        <div className="mf-homepage-bubble-left">
+                          <i />
+                        </div>
+                      </div>
+                      <div className="mf-homepage-msg-right">
+                        <div className="mf-homepage-bubble-right">
+                          <i />
+                        </div>
+                        <div className="mf-homepage-avatar-gray" />
+                      </div>
+                    </div>
+                    <div data-testid="homepage-preview-tag" className="mf-homepage-mini-tag">
+                      {copy.previewTag}
+                    </div>
+                    <CursorIcon />
+                  </div>
+                </div>
               </div>
 
-              <p className="max-w-[420px] pt-1 text-[13px] leading-[1.65] text-[#8798b3]">
-                {messages.editor.homepageHint}
-              </p>
-            </div>
-          </section>
+              <div data-testid="homepage-active-projects" className="mf-homepage-card-foot">
+                <div className="mf-homepage-foot-head">
+                  <h4>{copy.activeProjects}</h4>
+                  <div className="mf-homepage-msgs">
+                    <MessagesIcon />
+                    <span>{copy.newMessages}</span>
+                  </div>
+                </div>
 
-          <aside
-            aria-label={messages.editor.homepageRecentTitle}
-            data-testid="homepage-glass-stage"
-            className="relative min-h-[360px] overflow-hidden rounded-[34px] border border-white/70 bg-white/42 shadow-[0_18px_54px_rgba(111,146,191,0.12)] backdrop-blur-xl xl:h-full xl:min-h-[640px]"
-          >
-            <div data-testid="homepage-stage-atmosphere" className="absolute inset-0">
-              <HomepageHeroMotion />
-            </div>
-
-            <div className="relative z-[2] flex h-full flex-col">
-              <article
-                aria-describedby={recentSummaryId}
-                aria-label={messages.editor.homepageRecentTitle}
-                data-testid="homepage-floating-recent-card"
-                className="absolute left-7 right-7 top-7 rounded-[28px] border border-white/80 bg-white/68 p-5 shadow-[0_18px_46px_rgba(103,135,180,0.16)] backdrop-blur"
-              >
-                {props.latestDraft ? (
-                  <>
-                    <div className="max-w-[240px] text-[15px] font-extrabold tracking-[-0.02em] text-slate-900">
-                      {props.latestDraft.id}
+                <div className="mf-homepage-project-grid">
+                  <div data-testid="homepage-active-project-tile" className="mf-homepage-tile">
+                    <div className="mf-homepage-tile-icon">
+                      <LayersIcon />
                     </div>
-
-                    <div className="mt-3 text-[13px] leading-[1.65] text-[#4f6383]">
-                      {formatDateTime(props.latestDraft.updatedAt)}
+                    <div>
+                      <strong>{copy.tileTitle}</strong>
+                      <span>{copy.tileTime}</span>
                     </div>
-
-                    {canContinueLatestDraft ? (
-                      <button
-                        type="button"
-                        className="mt-4 inline-flex items-center text-[13px] font-extrabold text-blue-700 transition hover:text-blue-800"
-                        onClick={props.onOpenLatestDraft}
-                      >
-                        {messages.editor.homepageRecentContinue}
-                      </button>
-                    ) : (
-                      <p className="mt-4 text-[13px] leading-[1.65] text-[#7c8da8]">
-                        {messages.editor.homepageDraftEmpty}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-[15px] leading-[1.65] text-[#7c8da8]">
-                    {messages.editor.homepageRecentEmpty}
-                  </p>
-                )}
-              </article>
-
-              <div data-testid="homepage-recent-copy" className="mt-auto px-8 pb-8 text-[#7d8fac]">
-                <h2 className="text-[20px] font-[820] tracking-[-0.04em] text-slate-950">
-                  {messages.editor.homepageRecentTitle}
-                </h2>
-                <p id={recentSummaryId} className="mt-3 max-w-[290px] text-[15px] leading-[1.7]">
-                  {messages.editor.homepageRecentSummary}
-                </p>
+                  </div>
+                  <div data-testid="homepage-new-project-tile" className="mf-homepage-tile-add">
+                    {copy.newProject}
+                  </div>
+                </div>
               </div>
-            </div>
-          </aside>
-        </div>
+            </article>
+          </div>
+        </section>
       </div>
-    </section>
+    </main>
   );
 }

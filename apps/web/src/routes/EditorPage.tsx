@@ -142,8 +142,8 @@ export function EditorPage() {
   };
 
   return (
-    <div className="h-dvh overflow-hidden bg-slate-50 px-6 py-6 text-slate-900">
-      <div className="mx-auto flex h-full max-w-[1600px] min-h-0 flex-col gap-6">
+    <div className="h-dvh overflow-hidden bg-slate-50 text-slate-900">
+      <div className="mx-auto flex h-full min-h-0 flex-col gap-6">
         {!draft.asset ? (
           <div data-testid="editor-homepage-shell" className="flex min-h-0 flex-1 overflow-hidden">
             <EditorHomepage

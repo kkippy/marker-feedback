@@ -15,7 +15,8 @@ const getCanvasContext = (canvas: HTMLCanvasElement) => {
 };
 
 export const normalizeMosaicCellSize = (value?: number) => {
-  const baseValue = Number.isFinite(value) ? value : DEFAULT_MOSAIC_CELL_SIZE;
+  const baseValue =
+    typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_MOSAIC_CELL_SIZE;
   return clamp(Math.round(baseValue), MIN_MOSAIC_CELL_SIZE, MAX_MOSAIC_CELL_SIZE);
 };
 

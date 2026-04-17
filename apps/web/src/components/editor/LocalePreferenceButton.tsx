@@ -30,6 +30,13 @@ export function LocalePreferenceButton({ variant = 'default' }: { variant?: 'def
   const isHomepage = variant === 'homepage';
   const listboxId = `locale-preference-listbox-${variant}`;
 
+  const homepageGlobe = (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.2 2.3 3.3 5.3 3.3 9s-1.1 6.7-3.3 9M12 3c-2.2 2.3-3.3 5.3-3.3 9s1.1 6.7 3.3 9" />
+    </svg>
+  );
+
   return (
     <div
       ref={rootRef}
@@ -54,11 +61,7 @@ export function LocalePreferenceButton({ variant = 'default' }: { variant?: 'def
         aria-haspopup="listbox"
         className={`inline-flex items-center gap-2 rounded-full border transition ${
           isHomepage
-            ? `h-11 px-4 text-[13px] font-semibold ${
-                isOpen
-                  ? 'border-blue-200 bg-white text-slate-700 shadow-[0_12px_28px_rgba(37,99,235,0.08)]'
-                  : 'border-blue-100 bg-white/88 text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.04)] hover:border-blue-200 hover:bg-white'
-              }`
+            ? 'mf-homepage-lang-trigger'
             : `px-3 py-1.5 text-sm font-medium ${
                 isOpen
                   ? 'border-slate-300 bg-white text-slate-700'
@@ -67,14 +70,12 @@ export function LocalePreferenceButton({ variant = 'default' }: { variant?: 'def
         }`}
         onClick={() => setIsOpen((current) => !current)}
       >
-        <span className={isHomepage ? 'text-slate-500' : 'text-slate-500'}>
-          {messages.language.label}
-        </span>
-        <span className={isHomepage ? 'text-slate-700' : 'text-slate-700'}>
-          {messages.language.options[preference]}
+        {isHomepage ? homepageGlobe : <span className="text-slate-500">{messages.language.label}</span>}
+        <span className={isHomepage ? '' : 'text-slate-700'}>
+          {isHomepage ? messages.language.label : messages.language.options[preference]}
         </span>
         <ChevronDown
-          className={`size-4 ${isHomepage ? 'text-slate-400' : 'text-slate-400'} transition ${isOpen ? 'rotate-180' : ''}`}
+          className={`${isHomepage ? 'mf-homepage-lang-chevron' : 'size-4 text-slate-400'} transition ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
@@ -85,7 +86,7 @@ export function LocalePreferenceButton({ variant = 'default' }: { variant?: 'def
           role="listbox"
           className={`absolute top-full z-20 mt-2 min-w-52 rounded-2xl border bg-white/96 p-2 backdrop-blur ${
             isHomepage
-              ? 'right-0 border-blue-100 shadow-[0_20px_48px_rgba(37,99,235,0.12)]'
+              ? 'mf-homepage-lang-menu'
               : 'left-0 border-slate-200 shadow-[0_18px_48px_rgba(15,23,42,0.14)]'
           }`}
         >
