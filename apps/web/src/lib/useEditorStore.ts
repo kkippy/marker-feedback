@@ -41,6 +41,7 @@ export const DEFAULT_TEXT_STYLE: AnnotationStyle = {
 
 export const createEmptyDraft = (): EditorDraft => ({
   id: createId('draft'),
+  projectId: null,
   asset: null,
   embeddedAssets: [],
   annotations: [],
@@ -50,6 +51,7 @@ export const createEmptyDraft = (): EditorDraft => ({
 
 const normalizeDraft = (draft: EditorDraft): EditorDraft => ({
   ...draft,
+  projectId: draft.projectId ?? null,
   embeddedAssets: draft.embeddedAssets ?? [],
 });
 

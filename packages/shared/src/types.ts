@@ -12,6 +12,7 @@ export type AnnotationTool =
   | 'image-callout';
 export type ThreadStatus = 'open' | 'resolved';
 export type AssetSourceType = 'upload' | 'capture' | 'draft';
+export type ProjectStatus = 'active' | 'completed';
 
 export interface ImageAsset {
   id: string;
@@ -143,10 +144,21 @@ export interface CommentThread {
 
 export interface EditorDraft {
   id: string;
+  projectId: string | null;
   asset: ImageAsset | null;
   embeddedAssets: EmbeddedImageAsset[];
   annotations: Annotation[];
   threads: CommentThread[];
+  updatedAt: string;
+}
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  coverAssetId: string | null;
+  latestDraftId: string | null;
+  status: ProjectStatus;
+  createdAt: string;
   updatedAt: string;
 }
 

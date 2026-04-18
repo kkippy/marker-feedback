@@ -75,6 +75,7 @@ export function TopBar(props: {
   threadCount: number;
   zoom: number;
   activeTool?: AnnotationTool;
+  currentProjectName?: string;
   discussionPanel?: ReactNode;
   secondaryActions?: ReactNode;
   showSaveDraft?: boolean;
@@ -101,6 +102,12 @@ export function TopBar(props: {
           <DiscussionPanel title={messages.comments.title} count={props.threadCount}>
             {props.discussionPanel}
           </DiscussionPanel>
+        ) : null}
+
+        {props.currentProjectName ? (
+          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600">
+            {messages.topBar.currentProject(props.currentProjectName)}
+          </span>
         ) : null}
 
         {props.activeTool ? (

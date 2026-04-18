@@ -7,6 +7,7 @@ import {
   type EditorDraft,
   type EmbeddedImageAsset,
   type ImageAsset,
+  type ProjectItem,
   type ShareItem,
 } from '@marker/shared';
 import { createClient } from '@supabase/supabase-js';
@@ -14,6 +15,7 @@ import { prepareAssetForStorage } from './storage';
 
 const DRAFTS_KEY = 'marker-feedback:drafts';
 const LATEST_DRAFT_KEY = 'marker-feedback:latest-draft';
+const PROJECTS_KEY = 'marker-feedback:projects';
 const SHARES_KEY = 'marker-feedback:shares';
 const STORAGE_BUCKET =
   (import.meta.env.VITE_SUPABASE_STORAGE_BUCKET as string | undefined) || 'marker-assets';
@@ -30,6 +32,11 @@ type DraftPreview = {
   id: string;
   updatedAt: string;
   annotationCount: number;
+  hasAsset: boolean;
+};
+export type ProjectSummary = ProjectItem & {
+  annotationCount: number;
+  coverImageDataUrl: string | null;
   hasAsset: boolean;
 };
 type AssetRow = {
@@ -88,6 +95,26 @@ const readJson = <T,>(key: string, fallback: T): T => {
 
 const writeJson = (key: string, value: unknown) =>
   window.localStorage.setItem(key, JSON.stringify(value));
+
+const normalizeDraft = (draft: EditorDraft): EditorDraft => ({
+  ...draft,
+  projectId: draft.projectId ?? null,
+  embeddedAssets: draft.embeddedAssets ?? [],
+  annotations: draft.annotations ?? [],
+  threads: draft.threads ?? [],
+});
+
+const readDraftMap = () => {
+  const drafts = readJson<Record<string, EditorDraft>>(DRAFTS_KEY, {});
+  return Object.fromEntries(
+    Object.entries(drafts).map(([draftId, draft]) => [draftId, normalizeDraft(draft)]),
+  ) as Record<string, EditorDraft>;
+};
+
+const readProjectMap = () => readJson<Record<string, ProjectItem>>(PROJECTS_KEY, {});
+
+const writeDraftMap = (drafts: Record<string, EditorDraft>) => writeJson(DRAFTS_KEY, drafts);
+const writeProjectMap = (projects: Record<string, ProjectItem>) => writeJson(PROJECTS_KEY, projects);
 
 const assetToRow = (asset: ImageAsset): AssetRow => ({
   id: asset.id,
@@ -183,25 +210,169 @@ const toDraftPreview = (draft: EditorDraft): DraftPreview => ({
   hasAsset: Boolean(draft.asset),
 });
 
+const toProjectSummary = (
+  project: ProjectItem,
+  drafts: Record<string, EditorDraft>,
+): ProjectSummary => {
+  const latestDraft = project.latestDraftId ? drafts[project.latestDraftId] ?? null : null;
+
+  return {
+    ...project,
+    annotationCount: latestDraft?.annotations.length ?? 0,
+    coverImageDataUrl: latestDraft?.asset?.imageDataUrl ?? null,
+    hasAsset: Boolean(latestDraft?.asset),
+  };
+};
+
+const ensureProjectsForLegacyDraftsLocal = async () => {
+  const drafts = readDraftMap();
+  const projects = readProjectMap();
+  let draftsChanged = false;
+  let projectsChanged = false;
+
+  for (const draft of Object.values(drafts)) {
+    if (draft.projectId) {
+      continue;
+    }
+
+    const existingProject = Object.values(projects).find((project) => project.latestDraftId === draft.id);
+
+    if (existingProject) {
+      drafts[draft.id] = {
+        ...draft,
+        projectId: existingProject.id,
+      };
+      draftsChanged = true;
+      continue;
+    }
+
+    const projectId = createId('project');
+    projects[projectId] = {
+      id: projectId,
+      name: '',
+      coverAssetId: draft.asset?.id ?? null,
+      latestDraftId: draft.id,
+      status: 'active',
+      createdAt: draft.updatedAt,
+      updatedAt: draft.updatedAt,
+    };
+    drafts[draft.id] = {
+      ...draft,
+      projectId,
+    };
+    draftsChanged = true;
+    projectsChanged = true;
+  }
+
+  if (draftsChanged) {
+    writeDraftMap(drafts);
+  }
+  if (projectsChanged) {
+    writeProjectMap(projects);
+  }
+
+  return { drafts, projects };
+};
+
 const saveDraftLocal = async (draft: EditorDraft) => {
-  const drafts = readJson<Record<string, EditorDraft>>(DRAFTS_KEY, {});
-  drafts[draft.id] = draft;
-  writeJson(DRAFTS_KEY, drafts);
-  window.localStorage.setItem(LATEST_DRAFT_KEY, draft.id);
-  return draft.id;
+  const nextDraft = normalizeDraft(draft);
+  const drafts = readDraftMap();
+  drafts[nextDraft.id] = nextDraft;
+  writeDraftMap(drafts);
+  window.localStorage.setItem(LATEST_DRAFT_KEY, nextDraft.id);
+
+  if (nextDraft.projectId) {
+    const projects = readProjectMap();
+    const project = projects[nextDraft.projectId];
+
+    if (project) {
+      projects[nextDraft.projectId] = {
+        ...project,
+        coverAssetId: nextDraft.asset?.id ?? project.coverAssetId ?? null,
+        latestDraftId: nextDraft.id,
+        updatedAt: nextDraft.updatedAt,
+      };
+      writeProjectMap(projects);
+    }
+  }
+
+  return nextDraft.id;
 };
 
 const loadDraftLocal = async (draftId: string | 'latest') => {
-  const drafts = readJson<Record<string, EditorDraft>>(DRAFTS_KEY, {});
+  const drafts = readDraftMap();
   const actualId =
     draftId === 'latest' ? window.localStorage.getItem(LATEST_DRAFT_KEY) : draftId;
-  return actualId ? drafts[actualId] ?? null : null;
+  return actualId ? normalizeDraft(drafts[actualId]) ?? null : null;
 };
 
 const listDraftPreviewsLocal = async () =>
-  Object.values(readJson<Record<string, EditorDraft>>(DRAFTS_KEY, {}))
+  Object.values(readDraftMap())
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map(toDraftPreview);
+
+const saveProjectLocal = async (project: ProjectItem) => {
+  const projects = readProjectMap();
+  projects[project.id] = project;
+  writeProjectMap(projects);
+  return project;
+};
+
+const loadProjectLocal = async (projectId: string) => {
+  const { projects } = await ensureProjectsForLegacyDraftsLocal();
+  return projects[projectId] ?? null;
+};
+
+const listProjectsLocal = async () => {
+  const { drafts, projects } = await ensureProjectsForLegacyDraftsLocal();
+
+  return Object.values(projects)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((project) => toProjectSummary(project, drafts));
+};
+
+const createProjectLocal = async ({
+  name,
+  draft,
+}: {
+  name: string;
+  draft: EditorDraft;
+}) => {
+  const now = new Date().toISOString();
+  const projectId = createId('project');
+  const nextDraft: EditorDraft = normalizeDraft({
+    ...draft,
+    projectId,
+    updatedAt: draft.updatedAt || now,
+  });
+  const project: ProjectItem = {
+    id: projectId,
+    name: name.trim(),
+    coverAssetId: nextDraft.asset?.id ?? null,
+    latestDraftId: nextDraft.id,
+    status: 'active',
+    createdAt: now,
+    updatedAt: nextDraft.updatedAt,
+  };
+
+  await saveProjectLocal(project);
+  await saveDraftLocal(nextDraft);
+
+  return {
+    project,
+    draft: nextDraft,
+  };
+};
+
+const loadLatestProjectDraftLocal = async (projectId: string) => {
+  const project = await loadProjectLocal(projectId);
+
+  if (!project?.latestDraftId) {
+    return null;
+  }
+
+  return loadDraftLocal(project.latestDraftId);
+};
 
 const createShareLocal = async (draft: EditorDraft) => {
   const token = createShareToken();
@@ -364,6 +535,7 @@ const getShareRemote = async (token: string): Promise<ShareItem | null> => {
 
   const draft: EditorDraft = {
     id: createId('draft'),
+    projectId: null,
     asset: rowToAsset(assetRow),
     embeddedAssets: (embeddedAssetRows ?? []).map(rowToEmbeddedAsset),
     annotations: (annotationRows ?? []).map(rowToAnnotation),
@@ -390,6 +562,14 @@ const getShareRemote = async (token: string): Promise<ShareItem | null> => {
 export const saveDraft = async (draft: EditorDraft) => saveDraftLocal(draft);
 export const loadDraft = async (draftId: string | 'latest') => loadDraftLocal(draftId);
 export const listDraftPreviews = async () => listDraftPreviewsLocal();
+export const saveProject = async (project: ProjectItem) => saveProjectLocal(project);
+export const loadProject = async (projectId: string) => loadProjectLocal(projectId);
+export const listProjects = async () => listProjectsLocal();
+export const createProject = async (input: { name: string; draft: EditorDraft }) =>
+  createProjectLocal(input);
+export const loadLatestProjectDraft = async (projectId: string) =>
+  loadLatestProjectDraftLocal(projectId);
+export const ensureProjectsForLegacyDrafts = async () => ensureProjectsForLegacyDraftsLocal();
 
 export const createShare = async (draft: EditorDraft) => {
   if (!draft.asset) throw new Error('Cannot create a share without an image asset.');

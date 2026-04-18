@@ -28,6 +28,7 @@ export interface WebMessages {
     annotations: (count: number) => string;
     threads: (count: number) => string;
     zoom: (percent: number) => string;
+    currentProject: (name: string) => string;
     currentMode: (label: string) => string;
     zoomOutAriaLabel: string;
     zoomInAriaLabel: string;
@@ -48,12 +49,25 @@ export interface WebMessages {
     homepageDescription: string;
     homepageUploadImage: string;
     homepageOpenLatestDraft: string;
+    homepageNewProject: string;
+    homepageAllProjects: string;
     homepageHint: string;
     homepageRecentTitle: string;
     homepageRecentSummary: string;
     homepageRecentContinue: string;
     homepageRecentEmpty: string;
     homepageDraftEmpty: string;
+    projectListEmpty: string;
+    projectListTitle: string;
+    projectListDescription: string;
+    projectNameLabel: string;
+    screenshotLabel: string;
+    createProjectTitle: string;
+    createProjectDescription: string;
+    createProjectSubmit: string;
+    createProjectCancel: string;
+    projectUntitledFallback: string;
+    openProject: (name: string) => string;
     recentDraftsTitle: string;
     recentDraftsDescription: string;
     noDrafts: string;
@@ -138,6 +152,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       annotations: (count) => `${count} annotations`,
       threads: (count) => `${count} threads`,
       zoom: (percent) => `Zoom ${percent}%`,
+      currentProject: (name) => `Project: ${name}`,
       currentMode: (label) => `Mode: ${label}`,
       zoomOutAriaLabel: 'Zoom out',
       zoomInAriaLabel: 'Zoom in',
@@ -159,6 +174,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
       homepageDescription: 'Keep ideas on the image, and let feedback flow more naturally.',
       homepageUploadImage: 'Upload image and start',
       homepageOpenLatestDraft: 'Open latest draft',
+      homepageNewProject: 'New project',
+      homepageAllProjects: 'All projects',
       homepageHint: 'Upload a local image, or continue the feedback you left unfinished.',
       homepageRecentTitle: 'Recent project',
       homepageRecentSummary: 'Continue from where you left off.',
@@ -166,6 +183,17 @@ const messages: Record<SupportedLocale, WebMessages> = {
       homepageRecentEmpty:
         'No recent project yet. Starting from a single screenshot is a good place to begin.',
       homepageDraftEmpty: 'No draft yet. Your progress will be kept after you upload an image.',
+      projectListEmpty: 'No projects yet. Create one to keep related screenshot feedback together.',
+      projectListTitle: 'All projects',
+      projectListDescription: 'Browse every project and jump back into the latest related draft.',
+      projectNameLabel: 'Project name',
+      screenshotLabel: 'Screenshot',
+      createProjectTitle: 'Create a new project',
+      createProjectDescription: 'Give the project a clear name and upload the first screenshot to start editing.',
+      createProjectSubmit: 'Create and start',
+      createProjectCancel: 'Cancel',
+      projectUntitledFallback: 'Imported project',
+      openProject: (name) => `Open project ${name}`,
       recentDraftsTitle: 'Recent drafts',
       recentDraftsDescription: 'Resume previous work without re-uploading your screenshot.',
       noDrafts: 'No drafts yet.',
@@ -262,6 +290,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       annotations: (count) => `${count} 条标注`,
       threads: (count) => `${count} 条讨论`,
       zoom: (percent) => `缩放 ${percent}%`,
+      currentProject: (name) => `项目：${name}`,
       currentMode: (label) => `当前：${label}`,
       zoomOutAriaLabel: '缩小',
       zoomInAriaLabel: '放大',
@@ -283,12 +312,25 @@ const messages: Record<SupportedLocale, WebMessages> = {
       homepageDescription: '把想法留在画面上，让反馈更自然地被看见。',
       homepageUploadImage: '上传图片并开始',
       homepageOpenLatestDraft: '打开最近草稿',
+      homepageNewProject: '新建项目',
+      homepageAllProjects: '全部项目',
       homepageHint: '支持本地图片上传，也可继续最近一次未完成的反馈。',
       homepageRecentTitle: '最近项目',
       homepageRecentSummary: '从上一次停下的地方继续。',
       homepageRecentContinue: '继续这个项目',
       homepageRecentEmpty: '还没有最近项目，从一张截图开始也很好。',
       homepageDraftEmpty: '还没有草稿，上传图片后会自动保留你的进度。',
+      projectListEmpty: '还没有项目。先创建一个，把相关截图反馈放到一起。',
+      projectListTitle: '全部项目',
+      projectListDescription: '查看所有项目，并回到对应项目最近一次编辑的草稿。',
+      projectNameLabel: '项目名称',
+      screenshotLabel: '截图',
+      createProjectTitle: '新建项目',
+      createProjectDescription: '填写项目名称并上传第一张截图，随后即可进入编辑。',
+      createProjectSubmit: '创建并开始',
+      createProjectCancel: '取消',
+      projectUntitledFallback: '导入项目',
+      openProject: (name) => `打开项目 ${name}`,
       recentDraftsTitle: '最近草稿',
       recentDraftsDescription: '无需重新上传图片，继续之前的编辑。',
       noDrafts: '还没有草稿。',

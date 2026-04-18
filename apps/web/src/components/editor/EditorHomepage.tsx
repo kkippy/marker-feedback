@@ -1,53 +1,20 @@
 import { LocalePreferenceButton } from '@/components/editor/LocalePreferenceButton';
+import type { ProjectSummary } from '@/lib/persistence';
 import { useLocale } from '@/lib/locale';
 
-export interface HomepageDraftPreview {
-  id: string;
-  updatedAt: string;
-  annotationCount: number;
-  hasAsset: boolean;
-}
-
-interface EditorHomepageProps {
-  latestDraft: HomepageDraftPreview | null;
-  onUpload: () => void;
-  onOpenLatestDraft: () => void;
-}
-
-const homepageCopy = {
+const homepageStageCopy = {
   en: {
-    brandLine: 'Visual Communication',
-    titleStart: 'Make screenshot communication',
-    titleAccent: 'feel intuitive.',
-    description:
-      'Keep ideas on the image, let feedback be seen more naturally, and sync smoothly across devices.',
     latest: 'Latest',
-    latestTitle: 'Homepage visual refinement',
-    fallbackDate: '2026/04/16',
-    continue: 'Continue this project',
     activeProjects: 'Recent active projects',
     newMessages: '2 New Messages',
     previewTag: 'Multi-project workbench',
-    tileTitle: 'Component detail review',
-    tileTime: '10:20 AM',
-    newProject: '＋ New',
     socialProof: 'Join 10k+ creators',
   },
   'zh-CN': {
-    brandLine: 'Visual Communication',
-    titleStart: '让截图沟通，',
-    titleAccent: '更具直觉。',
-    description: '把想法留在画面上，让反馈更自然地被看见。支持多终端无缝同步。',
     latest: 'Latest',
-    latestTitle: '首页视觉优化讨论',
-    fallbackDate: '2026/04/16',
-    continue: '继续这个项目',
     activeProjects: '最近活跃项目',
-    newMessages: '2 New Messages',
+    newMessages: '2 条新消息',
     previewTag: '多项目工作台',
-    tileTitle: '组件细节走查',
-    tileTime: '10:20 AM',
-    newProject: '＋ 新建',
     socialProof: 'Join 10k+ creators',
   },
 } as const;
@@ -126,11 +93,34 @@ function RulerMarks() {
   );
 }
 
-export function EditorHomepage({ latestDraft, onUpload, onOpenLatestDraft }: EditorHomepageProps) {
+const getProjectName = (project: ProjectSummary | null, fallback: string) =>
+  project?.name.trim() ? project.name : fallback;
+
+interface EditorHomepageProps {
+  latestProject: ProjectSummary | null;
+  recentProjects: ProjectSummary[];
+  onCreateProject: () => void;
+  onOpenLatestProject: () => void;
+  onOpenProjects: () => void;
+  onOpenProject: (projectId: string) => void;
+}
+
+export function EditorHomepage({
+  latestProject,
+  recentProjects,
+  onCreateProject,
+  onOpenLatestProject,
+  onOpenProjects,
+  onOpenProject,
+}: EditorHomepageProps) {
   const { locale, messages, formatDateTime } = useLocale();
-  const copy = homepageCopy[locale];
-  const canOpenLatestDraft = Boolean(latestDraft?.hasAsset);
-  const latestDate = latestDraft ? formatDateTime(latestDraft.updatedAt) : copy.fallbackDate;
+  const copy = homepageStageCopy[locale];
+  const canOpenLatestProject = Boolean(latestProject?.latestDraftId && latestProject?.hasAsset);
+  const latestTitle = latestProject
+    ? getProjectName(latestProject, messages.editor.projectUntitledFallback)
+    : messages.editor.homepageRecentEmpty;
+  const latestDate = latestProject ? formatDateTime(latestProject.updatedAt) : messages.editor.homepageDraftEmpty;
+  const featuredProjects = recentProjects.slice(0, 2);
 
   return (
     <main data-testid="editor-homepage-root" className="mf-homepage-root h-full min-h-full w-full">
@@ -140,32 +130,29 @@ export function EditorHomepage({ latestDraft, onUpload, onOpenLatestDraft }: Edi
             <div className="mf-homepage-logo">M</div>
             <div>
               <h2>Marker Feedback</h2>
-              <p>{copy.brandLine}</p>
+              <p>{messages.editor.homepageBrandLine}</p>
             </div>
           </div>
 
           <div className="mf-homepage-intro">
             <div className="mf-homepage-badge">✦ 2026 Version</div>
             <h1 id="homepage-title" className="mf-homepage-title">
-              {copy.titleStart}
-              <br />
-              <span>{copy.titleAccent}</span>
+              {messages.editor.homepageTitle}
             </h1>
-            <p className="mf-homepage-desc">{copy.description}</p>
+            <p className="mf-homepage-desc">{messages.editor.homepageDescription}</p>
           </div>
 
           <div className="mf-homepage-actions">
-            <button type="button" className="mf-homepage-btn mf-homepage-btn-primary" onClick={onUpload}>
-              {messages.editor.homepageUploadImage}
+            <button type="button" className="mf-homepage-btn mf-homepage-btn-primary" onClick={onCreateProject}>
+              {messages.editor.homepageNewProject}
               <PlusIcon />
             </button>
             <button
               type="button"
               className="mf-homepage-btn mf-homepage-btn-secondary"
-              disabled={!canOpenLatestDraft}
-              onClick={onOpenLatestDraft}
+              onClick={onOpenProjects}
             >
-              {locale === 'zh-CN' ? '最近草稿' : 'Recent drafts'}
+              {messages.editor.homepageAllProjects}
               <span data-testid="homepage-recent-drafts-icon" className="mf-homepage-btn-secondary-icon">
                 <FolderIcon />
               </span>
@@ -200,18 +187,18 @@ export function EditorHomepage({ latestDraft, onUpload, onOpenLatestDraft }: Edi
                   <div className="mf-homepage-meta">
                     <div className="mf-homepage-meta-line">
                       <span className="mf-homepage-latest">{copy.latest}</span>
-                      <h3>{canOpenLatestDraft ? copy.latestTitle : messages.editor.homepageRecentEmpty}</h3>
+                      <h3>{latestTitle}</h3>
                     </div>
-                    <p>{canOpenLatestDraft ? latestDate : messages.editor.homepageDraftEmpty}</p>
+                    <p>{latestDate}</p>
                   </div>
-                  {canOpenLatestDraft ? (
+                  {canOpenLatestProject ? (
                     <button
                       type="button"
                       className={`mf-homepage-continue${locale === 'en' ? ' mf-homepage-continue-wide' : ''}`}
-                      onClick={onOpenLatestDraft}
+                      onClick={onOpenLatestProject}
                     >
                       <span data-testid="homepage-continue-label" className="mf-homepage-continue-label">
-                        {copy.continue}
+                        {messages.editor.homepageRecentContinue}
                       </span>
                       <ArrowIcon />
                     </button>
@@ -259,18 +246,40 @@ export function EditorHomepage({ latestDraft, onUpload, onOpenLatestDraft }: Edi
                 </div>
 
                 <div className="mf-homepage-project-grid">
-                  <div data-testid="homepage-active-project-tile" className="mf-homepage-tile">
-                    <div className="mf-homepage-tile-icon">
-                      <LayersIcon />
+                  {featuredProjects.length ? (
+                    featuredProjects.map((project) => {
+                      const projectName = getProjectName(project, messages.editor.projectUntitledFallback);
+
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          data-testid="homepage-active-project-tile"
+                          className="mf-homepage-tile text-left"
+                          aria-label={messages.editor.openProject(projectName)}
+                          onClick={() => onOpenProject(project.id)}
+                        >
+                          <div className="mf-homepage-tile-icon">
+                            <LayersIcon />
+                          </div>
+                          <div>
+                            <strong>{projectName}</strong>
+                            <span>{formatDateTime(project.updatedAt)}</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div data-testid="homepage-active-project-tile" className="mf-homepage-tile">
+                      <div className="mf-homepage-tile-icon">
+                        <LayersIcon />
+                      </div>
+                      <div>
+                        <strong>{messages.editor.homepageRecentSummary}</strong>
+                        <span>{messages.editor.homepageDraftEmpty}</span>
+                      </div>
                     </div>
-                    <div>
-                      <strong>{copy.tileTitle}</strong>
-                      <span>{copy.tileTime}</span>
-                    </div>
-                  </div>
-                  <div data-testid="homepage-new-project-tile" className="mf-homepage-tile-add">
-                    {copy.newProject}
-                  </div>
+                  )}
                 </div>
               </div>
             </article>
