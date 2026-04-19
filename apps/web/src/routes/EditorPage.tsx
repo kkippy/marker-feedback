@@ -114,6 +114,10 @@ export function EditorPage() {
   const handleExportReady = useCallback((nextExporter: () => Promise<string | undefined>) => {
     exporterRef.current = nextExporter;
   }, []);
+  const handleGoHome = useCallback(() => {
+    resetDraft();
+    navigate('/editor', { replace: true });
+  }, [navigate, resetDraft]);
 
   const openFilePicker = () => fileRef.current?.click();
   const latestProject = projects[0] ?? null;
@@ -271,7 +275,7 @@ export function EditorPage() {
                   downloadDataUrl(png, buildExportFileName());
                 }
               }}
-              onReset={() => resetDraft()}
+              onHome={handleGoHome}
             />
             <div className="min-h-0 flex-1">
               <AnnotationCanvas onExportReady={handleExportReady} />

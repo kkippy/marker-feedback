@@ -28,6 +28,10 @@ export function SharePage() {
   const handleExportReady = useCallback((nextExporter: () => Promise<string | undefined>) => {
     exporterRef.current = nextExporter;
   }, []);
+  const handleGoHome = useCallback(() => {
+    resetDraft();
+    navigate('/editor', { replace: true });
+  }, [navigate, resetDraft]);
 
   useEffect(() => {
     const load = async () => {
@@ -108,7 +112,7 @@ export function SharePage() {
               downloadDataUrl(png, buildExportFileName());
             }
           }}
-          onReset={resetDraft}
+          onHome={handleGoHome}
         />
 
         <div className="flex min-h-0 flex-1 flex-col">

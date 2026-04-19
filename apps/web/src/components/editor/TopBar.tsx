@@ -96,7 +96,7 @@ export function TopBar(props: {
   onSaveDraft: () => void;
   onCreateShare: () => void;
   onExport: () => void;
-  onReset: () => void;
+  onHome: () => void;
 }) {
   const { messages } = useLocale();
 
@@ -132,7 +132,7 @@ export function TopBar(props: {
         <ToolbarIconButton
           label={messages.topBar.home}
           className={topBarButtonStyles.home}
-          onClick={props.onReset}
+          onClick={props.onHome}
         >
           <House className="size-4" />
         </ToolbarIconButton>
