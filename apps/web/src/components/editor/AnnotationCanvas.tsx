@@ -71,6 +71,10 @@ const MARKER_RADIUS = 16;
 const HIGHLIGHT_FILL_ALPHA = 0.25;
 const MOSAIC_BORDER_COLOR = 'rgba(255,255,255,0.58)';
 const MOSAIC_BORDER_WIDTH = 1;
+const CANVAS_VIEWPORT_BUTTON_CLASS =
+  '!bg-[#eaf3ff] !text-[#256fdc] border border-[#cfe3ff] hover:!bg-[#dbeafe] hover:!text-[#1d5fbe]';
+const CANVAS_VIEWPORT_INFO_CLASS =
+  'rounded-lg border border-[#cfe3ff] bg-[#eaf3ff] px-2.5 py-1.5 text-xs font-medium tabular-nums text-[#256fdc]';
 
 interface LineEditPreview {
   annotationId: string;
@@ -5592,22 +5596,22 @@ export function AnnotationCanvas({
         />
 
         <div className="pointer-events-none absolute inset-x-4 top-4 flex items-start justify-between">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/75 bg-white/80 p-2.5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
             <Button
               type="button"
-              className="bg-slate-100 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-200"
+              className={cn(CANVAS_VIEWPORT_BUTTON_CLASS, 'px-3 py-1.5 text-xs')}
               onClick={() => setViewportCenter(1)}
             >
               Fit
             </Button>
             <Button
               type="button"
-              className="bg-slate-100 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-200"
+              className={cn(CANVAS_VIEWPORT_BUTTON_CLASS, 'px-3 py-1.5 text-xs')}
               onClick={() => setViewportCenter(actualSizeZoom)}
             >
               1:1
             </Button>
-            <div className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium tabular-nums text-slate-600">
+            <div className={CANVAS_VIEWPORT_INFO_CLASS}>
               {Math.round(renderedDocumentPosition.x)}, {Math.round(renderedDocumentPosition.y)}
             </div>
           </div>

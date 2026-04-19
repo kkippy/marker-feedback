@@ -5,11 +5,22 @@ import {
   type ReactNode,
 } from 'react';
 import type { AnnotationTool } from '@marker/shared';
-import { Download, MessageSquareMore, RotateCcw, Save, Share2 } from 'lucide-react';
+import { Download, House, MessageSquareMore, Save, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
 import { useLocale } from '@/lib/locale';
 import { LocalePreferenceButton } from './LocalePreferenceButton';
+
+export const topBarButtonStyles = {
+  home:
+    '!bg-[#348bff] !text-white shadow-[0_12px_26px_rgba(52,139,255,0.26)] hover:!bg-[#1f7af0]',
+  neutral:
+    '!bg-[#eaf3ff] !text-[#256fdc] border border-[#cfe3ff] hover:!bg-[#dbeafe] hover:!text-[#1d5fbe]',
+  save:
+    '!bg-[#256fdc] !text-white shadow-[0_12px_24px_rgba(37,111,220,0.2)] hover:!bg-[#1d5fbe]',
+  share:
+    '!bg-[#eaf3ff] !text-[#256fdc] border border-[#cfe3ff] hover:!bg-[#dbeafe] hover:!text-[#1d5fbe]',
+};
 
 function useDismissibleLayer<T extends HTMLElement>(isOpen: boolean, onClose: () => void) {
   const ref = useRef<T>(null);
@@ -118,50 +129,54 @@ export function TopBar(props: {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <ToolbarIconButton
+          label={messages.topBar.home}
+          className={topBarButtonStyles.home}
+          onClick={props.onReset}
+        >
+          <House className="size-4" />
+        </ToolbarIconButton>
         {props.secondaryActions}
 
         <ToolbarIconButton
           label={messages.topBar.zoomOutAriaLabel}
-          className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+          className={topBarButtonStyles.neutral}
           onClick={props.onZoomOut}
         >
           -
         </ToolbarIconButton>
         <ToolbarIconButton
           label={messages.topBar.zoomInAriaLabel}
-          className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+          className={topBarButtonStyles.neutral}
           onClick={props.onZoomIn}
         >
           +
         </ToolbarIconButton>
-        <ToolbarIconButton
-          label={messages.topBar.reset}
-          className="bg-slate-100 text-slate-700 hover:bg-slate-200"
-          onClick={props.onReset}
-        >
-          <RotateCcw className="size-4" />
-        </ToolbarIconButton>
-        <ToolbarIconButton
-          label={messages.topBar.exportPng}
-          className="bg-amber-500 hover:bg-amber-400"
-          onClick={props.onExport}
-        >
-          <Download className="size-4" />
-        </ToolbarIconButton>
         {props.showSaveDraft === false ? null : (
           <ToolbarIconButton
             label={messages.topBar.saveDraft}
-            className="bg-slate-700 hover:bg-slate-600"
+            className={topBarButtonStyles.save}
             onClick={props.onSaveDraft}
           >
             <Save className="size-4" />
           </ToolbarIconButton>
         )}
         {props.showCreateShare === false ? null : (
-          <ToolbarIconButton label={messages.topBar.createShareLink} onClick={props.onCreateShare}>
+          <ToolbarIconButton
+            label={messages.topBar.createShareLink}
+            className={topBarButtonStyles.share}
+            onClick={props.onCreateShare}
+          >
             <Share2 className="size-4" />
           </ToolbarIconButton>
         )}
+        <ToolbarIconButton
+          label={messages.topBar.exportPng}
+          className={topBarButtonStyles.share}
+          onClick={props.onExport}
+        >
+          <Download className="size-4" />
+        </ToolbarIconButton>
       </div>
     </div>
   );

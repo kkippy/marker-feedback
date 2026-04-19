@@ -32,7 +32,7 @@ export interface WebMessages {
     currentMode: (label: string) => string;
     zoomOutAriaLabel: string;
     zoomInAriaLabel: string;
-    reset: string;
+    home: string;
     exportPng: string;
     saveDraft: string;
     createShareLink: string;
@@ -60,6 +60,7 @@ export interface WebMessages {
     projectListEmpty: string;
     projectListTitle: string;
     projectListDescription: string;
+    projectListBackHome: string;
     projectNameLabel: string;
     screenshotLabel: string;
     createProjectTitle: string;
@@ -156,7 +157,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       currentMode: (label) => `Mode: ${label}`,
       zoomOutAriaLabel: 'Zoom out',
       zoomInAriaLabel: 'Zoom in',
-      reset: 'Reset',
+      home: 'Home',
       exportPng: 'Export PNG',
       saveDraft: 'Save Draft',
       createShareLink: 'Create Share Link',
@@ -186,6 +187,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       projectListEmpty: 'No projects yet. Create one to keep related screenshot feedback together.',
       projectListTitle: 'All projects',
       projectListDescription: 'Browse every project and jump back into the latest related draft.',
+      projectListBackHome: 'Back to home',
       projectNameLabel: 'Project name',
       screenshotLabel: 'Screenshot',
       createProjectTitle: 'Create a new project',
@@ -294,7 +296,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       currentMode: (label) => `当前：${label}`,
       zoomOutAriaLabel: '缩小',
       zoomInAriaLabel: '放大',
-      reset: '重置',
+      home: '首页',
       exportPng: '导出 PNG',
       saveDraft: '保存草稿',
       createShareLink: '创建分享链接',
@@ -323,6 +325,7 @@ const messages: Record<SupportedLocale, WebMessages> = {
       projectListEmpty: '还没有项目。先创建一个，把相关截图反馈放到一起。',
       projectListTitle: '全部项目',
       projectListDescription: '查看所有项目，并回到对应项目最近一次编辑的草稿。',
+      projectListBackHome: '返回首页',
       projectNameLabel: '项目名称',
       screenshotLabel: '截图',
       createProjectTitle: '新建项目',

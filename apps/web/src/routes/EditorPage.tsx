@@ -6,7 +6,7 @@ import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
 import { CommentSidebar } from '@/components/editor/CommentSidebar';
 import { CreateProjectDialog } from '@/components/editor/CreateProjectDialog';
 import { EditorHomepage } from '@/components/editor/EditorHomepage';
-import { TopBar } from '@/components/editor/TopBar';
+import { TopBar, topBarButtonStyles } from '@/components/editor/TopBar';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
 import { getBootstrapPayload } from '@/lib/bootstrap';
 import { buildExportFileName, downloadDataUrl } from '@/lib/export';
@@ -233,21 +233,21 @@ export function EditorPage() {
                   <>
                     <ToolbarIconButton
                       label={messages.editor.undo}
-                      className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      className={topBarButtonStyles.share}
                       onClick={undo}
                     >
                       <Undo2 className="size-4" />
                     </ToolbarIconButton>
                     <ToolbarIconButton
                       label={messages.editor.redo}
-                      className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      className={topBarButtonStyles.share}
                       onClick={redo}
                     >
                       <Redo2 className="size-4" />
                     </ToolbarIconButton>
                     <ToolbarIconButton
                       label={messages.editor.replaceImage}
-                      className="bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      className={topBarButtonStyles.share}
                       onClick={openFilePicker}
                     >
                       <ImageUp className="size-4" />
