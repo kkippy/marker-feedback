@@ -385,7 +385,7 @@ export function ProjectDetailPage() {
                     </span>
                   </div>
 
-                  <span className="detail-discussion-chip">
+                  <span className="detail-discussion-chip detail-chip-accent">
                     <MessageSquare className="size-[14px]" />
                     <span>{messages.comments.title}</span>
                     <strong>{totalThreads}</strong>
@@ -425,7 +425,11 @@ export function ProjectDetailPage() {
                     ? buildShareUrl(activeShare.shareToken)
                     : messages.editor.projectDetailShareUnavailable}
                 </span>
-                <button type="button" className="detail-copy" onClick={handleShareAction}>
+                <button
+                  type="button"
+                  className="detail-copy detail-copy-accent"
+                  onClick={handleShareAction}
+                >
                   {activeShare
                     ? messages.editor.projectDetailShareCopy
                     : messages.editor.projectDetailShareEnable}

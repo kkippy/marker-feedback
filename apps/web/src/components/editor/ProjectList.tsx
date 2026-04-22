@@ -1,5 +1,12 @@
-import { useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
-import { Plus } from 'lucide-react';
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
+import { Pencil, Plus } from 'lucide-react';
 import type { ProjectSummary } from '@/lib/persistence';
 import { useLocale } from '@/lib/locale';
 
@@ -281,23 +288,28 @@ function ProjectCard({
   onOpenProject,
   onOpenDraft,
   onAddScreenshot,
+  onRenameProject,
 }: {
   project: ProjectSummary;
   onOpenProject: (projectId: string) => void;
   onOpenDraft?: (draftId: string) => void;
   onAddScreenshot?: (projectId: string, file: File) => void | Promise<void>;
+  onRenameProject?: (projectId: string, name: string) => void | Promise<void>;
 }) {
   const { locale, messages } = useLocale();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [draftProjectName, setDraftProjectName] = useState('');
   const projectName = formatProjectName(project, messages.editor.projectUntitledFallback);
   const screenshotCount = getProjectScreenshotCount(project);
   const previewImages = getProjectPreviewImages(project).slice(0, screenshotCount <= 4 ? 4 : 3);
   const previewDraftIds = getProjectPreviewDraftIds(project);
   const visualIndex = hoverIndex ?? activeIndex;
   const activeDotIndex = previewImages.length ? Math.min(visualIndex, previewImages.length - 1) : 0;
+  const renameProjectLabel = locale === 'zh-CN' ? '重命名项目' : 'Rename project';
   const formattedDate = (() => {
     const date = new Date(project.updatedAt);
 
@@ -322,6 +334,42 @@ function ProjectCard({
     }
 
     await onAddScreenshot(project.id, file);
+  };
+
+  const startTitleEditing = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setDraftProjectName(projectName);
+    setIsEditingTitle(true);
+  };
+
+  const cancelTitleEditing = () => {
+    setDraftProjectName(projectName);
+    setIsEditingTitle(false);
+  };
+
+  const saveTitleEditing = async () => {
+    const nextName = draftProjectName.trim();
+    setIsEditingTitle(false);
+
+    if (!nextName || nextName === projectName || !onRenameProject) {
+      setDraftProjectName(projectName);
+      return;
+    }
+
+    await onRenameProject(project.id, nextName);
+  };
+
+  const handleTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void saveTitleEditing();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelTitleEditing();
+    }
   };
 
   return (
@@ -354,14 +402,44 @@ function ProjectCard({
 
         <div className="grid gap-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <h3 className="truncate text-base font-black leading-tight tracking-[-0.035em]">{projectName}</h3>
+            <div className="min-w-0 max-w-[222px] space-y-2">
+              <div className="group/title grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+                {isEditingTitle ? (
+                  <>
+                    <input
+                      value={draftProjectName}
+                      autoFocus
+                      aria-label={messages.editor.projectNameLabel}
+                      className="h-10 min-w-0 w-full rounded-xl border border-[#bfdbfe] bg-white/88 px-3 text-[15px] font-black leading-tight tracking-[-0.02em] text-slate-900 outline-none shadow-[0_10px_24px_rgba(52,139,255,0.10)] focus:border-[#348bff] focus:ring-2 focus:ring-[#348bff]/18"
+                      onChange={(event) => setDraftProjectName(event.target.value)}
+                      onKeyDown={handleTitleKeyDown}
+                      onBlur={() => void saveTitleEditing()}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                    <span aria-hidden="true" className="size-6 shrink-0" />
+                  </>
+                ) : (
+                  <>
+                    <h3 className="min-w-0 truncate text-base font-black leading-tight tracking-[-0.035em]">
+                      {projectName}
+                    </h3>
+                    <button
+                      type="button"
+                      data-testid="project-rename-button"
+                      aria-label={renameProjectLabel}
+                      title={renameProjectLabel}
+                      className="grid size-6 shrink-0 place-items-center rounded-full text-slate-400 opacity-0 transition duration-200 hover:bg-[#348bff]/10 hover:text-[#1f6ee8] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/45 group-hover/title:opacity-100"
+                      onClick={startTitleEditing}
+                    >
+                      <Pencil className="size-3.5 stroke-[2.3]" />
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   data-testid="project-add-screenshot-button"
                   aria-label={messages.editor.projectDetailAddScreenshot}
-                  className="group grid size-7 shrink-0 place-items-center rounded-full bg-[#348bff]/10 text-[#1f6ee8] transition-colors duration-300 hover:bg-[#348bff]/16 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/55"
+                  className="group ml-2 grid size-7 shrink-0 place-items-center rounded-full bg-[#348bff]/10 text-[#1f6ee8] transition-colors duration-300 hover:bg-[#348bff]/16 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/55"
                   onClick={handleAddScreenshotClick}
                 >
                   <Plus className="size-4 origin-center stroke-[2.4] transition-transform duration-300 ease-out group-hover:rotate-90" />
@@ -410,11 +488,12 @@ export function ProjectList(props: {
   onOpenDraft?: (draftId: string) => void;
   onCreateProject?: () => void;
   onAddScreenshot?: (projectId: string, file: File) => void | Promise<void>;
+  onRenameProject?: (projectId: string, name: string) => void | Promise<void>;
   className?: string;
 }) {
   return (
     <div className={props.className}>
-      <div className="grid grid-cols-1 gap-x-[52px] gap-y-16 overflow-visible pt-6 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-x-[52px] gap-y-16 overflow-visible sm:grid-cols-2 xl:grid-cols-4">
         {props.projects.map((project) => (
           <ProjectCard
             key={project.id}
@@ -422,6 +501,7 @@ export function ProjectList(props: {
             onOpenProject={props.onOpenProject}
             onOpenDraft={props.onOpenDraft}
             onAddScreenshot={props.onAddScreenshot}
+            onRenameProject={props.onRenameProject}
           />
         ))}
 

@@ -5,14 +5,15 @@ import { CreateProjectDialog } from '@/components/editor/CreateProjectDialog';
 import { ProjectList } from '@/components/editor/ProjectList';
 import { useLocale } from '@/lib/locale';
 import { addScreenshotToProjectFromFile, createProjectFromFile } from '@/lib/projectCreation';
-import { listProjects, type ProjectSummary } from '@/lib/persistence';
+import { listProjects, saveProject, type ProjectSummary } from '@/lib/persistence';
 
 export function ProjectsPage() {
   const navigate = useNavigate();
-  const { messages } = useLocale();
+  const { locale, messages } = useLocale();
   const requestRef = useRef(0);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const titleBackdrop = locale === 'en' ? '项目' : 'PROJECTS';
 
   useEffect(() => {
     requestRef.current += 1;
@@ -54,12 +55,20 @@ export function ProjectsPage() {
         </button>
 
         <header className="mt-8 mb-16">
-          <h1
-            data-testid="project-list-title"
-            className="text-[clamp(40px,5.2vw,72px)] font-black leading-none tracking-[-0.07em] text-slate-950"
-          >
-            {messages.editor.projectListTitle}
-          </h1>
+          <div className="relative py-8">
+            <span
+              data-testid="project-list-title-backdrop"
+              className="pointer-events-none absolute -top-6 left-0 select-none text-8xl font-black uppercase tracking-tighter text-slate-300 opacity-90"
+            >
+              {titleBackdrop}
+            </span>
+            <h1
+              data-testid="project-list-title"
+              className="relative z-10 ml-2 text-[clamp(40px,5.2vw,72px)] font-black leading-none tracking-[3px] text-slate-950"
+            >
+              {messages.editor.projectListTitle}
+            </h1>
+          </div>
         </header>
 
         <ProjectList
@@ -73,6 +82,28 @@ export function ProjectsPage() {
           onAddScreenshot={async (projectId, file) => {
             const created = await addScreenshotToProjectFromFile({ projectId, file });
             navigate(`/editor?sourceType=draft&draftId=${created.draft.id}`);
+          }}
+          onRenameProject={async (projectId, name) => {
+            const currentProject = projects.find((project) => project.id === projectId);
+
+            if (!currentProject) {
+              return;
+            }
+
+            const updatedProject = {
+              ...currentProject,
+              name,
+              updatedAt: new Date().toISOString(),
+            };
+
+            await saveProject(updatedProject);
+            setProjects((currentProjects) =>
+              currentProjects.map((project) =>
+                project.id === projectId
+                  ? { ...project, name: updatedProject.name, updatedAt: updatedProject.updatedAt }
+                  : project,
+              ),
+            );
           }}
           onCreateProject={() => {
             setIsCreateProjectOpen(true);
