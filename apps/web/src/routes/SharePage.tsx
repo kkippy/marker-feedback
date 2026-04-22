@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AnnotationCanvas } from '@/components/editor/AnnotationCanvas';
 import { CommentSidebar } from '@/components/editor/CommentSidebar';
+import { routeSharedLayoutIds, routeSharedTransition } from '@/components/motion/routeTransition';
 import { TopBar } from '@/components/editor/TopBar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -116,6 +118,11 @@ export function SharePage() {
         />
 
         <div className="flex min-h-0 flex-1 flex-col">
+          <motion.div
+            layoutId={routeSharedLayoutIds.primarySurface}
+            transition={routeSharedTransition}
+            className="flex min-h-0 flex-1 flex-col"
+          >
           <Card className="p-4">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -130,9 +137,14 @@ export function SharePage() {
             </div>
           </Card>
 
-          <div className="mt-4 min-h-0 flex-1">
+          <motion.div
+            layoutId={routeSharedLayoutIds.previewStage}
+            transition={routeSharedTransition}
+            className="mt-4 min-h-0 flex-1"
+          >
             <AnnotationCanvas readOnly onExportReady={handleExportReady} />
-          </div>
+          </motion.div>
+          </motion.div>
         </div>
       </div>
     </div>

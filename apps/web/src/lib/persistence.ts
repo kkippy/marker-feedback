@@ -36,7 +36,21 @@ type DraftPreview = {
 };
 export type ProjectSummary = ProjectItem & {
   annotationCount: number;
+  threadCount: number;
   coverImageDataUrl: string | null;
+  previewImageDataUrls: string[];
+  previewDraftIds: string[];
+  screenshotCount: number;
+  hasAsset: boolean;
+};
+export type ProjectDraftSummary = {
+  id: string;
+  projectId: string | null;
+  updatedAt: string;
+  annotationCount: number;
+  threadCount: number;
+  imageDataUrl: string | null;
+  name: string | null;
   hasAsset: boolean;
 };
 type AssetRow = {
@@ -215,14 +229,36 @@ const toProjectSummary = (
   drafts: Record<string, EditorDraft>,
 ): ProjectSummary => {
   const latestDraft = project.latestDraftId ? drafts[project.latestDraftId] ?? null : null;
+  const projectDrafts = Object.values(drafts)
+    .filter((draft) => draft.projectId === project.id)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const imageDrafts = projectDrafts.filter((draft) => Boolean(draft.asset));
 
   return {
     ...project,
-    annotationCount: latestDraft?.annotations.length ?? 0,
-    coverImageDataUrl: latestDraft?.asset?.imageDataUrl ?? null,
-    hasAsset: Boolean(latestDraft?.asset),
+    annotationCount: projectDrafts.reduce((total, draft) => total + draft.annotations.length, 0),
+    threadCount: projectDrafts.reduce((total, draft) => total + draft.threads.length, 0),
+    coverImageDataUrl: latestDraft?.asset?.imageDataUrl ?? imageDrafts[0]?.asset?.imageDataUrl ?? null,
+    previewImageDataUrls: imageDrafts
+      .slice(0, 4)
+      .map((draft) => draft.asset?.imageDataUrl)
+      .filter((imageDataUrl): imageDataUrl is string => Boolean(imageDataUrl)),
+    previewDraftIds: imageDrafts.slice(0, 4).map((draft) => draft.id),
+    screenshotCount: imageDrafts.length,
+    hasAsset: imageDrafts.length > 0,
   };
 };
+
+const toProjectDraftSummary = (draft: EditorDraft): ProjectDraftSummary => ({
+  id: draft.id,
+  projectId: draft.projectId ?? null,
+  updatedAt: draft.updatedAt,
+  annotationCount: draft.annotations.length,
+  threadCount: draft.threads.length,
+  imageDataUrl: draft.asset?.imageDataUrl ?? null,
+  name: draft.asset?.name ?? null,
+  hasAsset: Boolean(draft.asset),
+});
 
 const ensureProjectsForLegacyDraftsLocal = async () => {
   const drafts = readDraftMap();
@@ -329,6 +365,15 @@ const listProjectsLocal = async () => {
   return Object.values(projects)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map((project) => toProjectSummary(project, drafts));
+};
+
+const listProjectDraftsLocal = async (projectId: string) => {
+  const { drafts } = await ensureProjectsForLegacyDraftsLocal();
+
+  return Object.values(drafts)
+    .filter((draft) => draft.projectId === projectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(toProjectDraftSummary);
 };
 
 const createProjectLocal = async ({
@@ -565,6 +610,7 @@ export const listDraftPreviews = async () => listDraftPreviewsLocal();
 export const saveProject = async (project: ProjectItem) => saveProjectLocal(project);
 export const loadProject = async (projectId: string) => loadProjectLocal(projectId);
 export const listProjects = async () => listProjectsLocal();
+export const listProjectDrafts = async (projectId: string) => listProjectDraftsLocal(projectId);
 export const createProject = async (input: { name: string; draft: EditorDraft }) =>
   createProjectLocal(input);
 export const loadLatestProjectDraft = async (projectId: string) =>

@@ -32,6 +32,7 @@ describe('app routes', () => {
     expect(
       await screen.findByRole('heading', { name: /Make screenshot feedback\s*lighter\./ }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('route-transition-editor')).toBeInTheDocument();
   });
 
   it('follows system language when navigator is Chinese', async () => {

@@ -1,4 +1,4 @@
-import type { AnnotationTool } from '@marker/shared';
+﻿import type { AnnotationTool } from '@marker/shared';
 import {
   createContext,
   useContext,
@@ -61,6 +61,8 @@ export interface WebMessages {
     projectListTitle: string;
     projectListDescription: string;
     projectListBackHome: string;
+    projectListCreateProject: string;
+    projectListMoreScreenshots: string;
     projectNameLabel: string;
     screenshotLabel: string;
     createProjectTitle: string;
@@ -69,6 +71,20 @@ export interface WebMessages {
     createProjectCancel: string;
     projectUntitledFallback: string;
     openProject: (name: string) => string;
+    projectDetailAddScreenshot: string;
+    projectDetailBackToProjects: string;
+    projectDetailListTitle: string;
+    projectDetailListDescription: string;
+    projectDetailScreenshotCount: (count: number) => string;
+    projectDetailProgressLabel: string;
+    projectDetailShareLabel: string;
+    projectDetailSharePrivate: string;
+    projectDetailSharePublic: string;
+    projectDetailShareCopy: string;
+    projectDetailShareEnable: string;
+    projectDetailShareUnavailable: string;
+    projectDetailShareHint: (name: string) => string;
+    projectDetailScreenshotFallback: (index: number) => string;
     recentDraftsTitle: string;
     recentDraftsDescription: string;
     noDrafts: string;
@@ -188,6 +204,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
       projectListTitle: 'All projects',
       projectListDescription: 'Browse every project and jump back into the latest related draft.',
       projectListBackHome: 'Back to home',
+      projectListCreateProject: 'Create feedback project',
+      projectListMoreScreenshots: 'More screenshots',
       projectNameLabel: 'Project name',
       screenshotLabel: 'Screenshot',
       createProjectTitle: 'Create a new project',
@@ -196,6 +214,22 @@ const messages: Record<SupportedLocale, WebMessages> = {
       createProjectCancel: 'Cancel',
       projectUntitledFallback: 'Imported project',
       openProject: (name) => `Open project ${name}`,
+      projectDetailAddScreenshot: 'Add screenshot',
+      projectDetailBackToProjects: 'Back to project list',
+      projectDetailListTitle: 'Project screenshots',
+      projectDetailListDescription: 'Hover to preview, click a row to enter the editor.',
+      projectDetailScreenshotCount: (count) => `${count} screenshots`,
+      projectDetailProgressLabel: 'Project progress',
+      projectDetailShareLabel: 'Current screenshot collaboration share',
+      projectDetailSharePrivate: 'Private',
+      projectDetailSharePublic: 'Public',
+      projectDetailShareCopy: 'Copy link',
+      projectDetailShareEnable: 'Enable share link',
+      projectDetailShareUnavailable: 'Sharing can be opened from the editor.',
+      projectDetailShareHint: (name) =>
+        `Tip: You can enable sharing for each screenshot individually. Current: ${name}`,
+      projectDetailScreenshotFallback: (index) =>
+        `Screenshot ${String(index + 1).padStart(2, '0')}`,
       recentDraftsTitle: 'Recent drafts',
       recentDraftsDescription: 'Resume previous work without re-uploading your screenshot.',
       noDrafts: 'No drafts yet.',
@@ -326,6 +360,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
       projectListTitle: '全部项目',
       projectListDescription: '查看所有项目，并回到对应项目最近一次编辑的草稿。',
       projectListBackHome: '返回首页',
+      projectListCreateProject: '新建项目',
+      projectListMoreScreenshots: '更多截图',
       projectNameLabel: '项目名称',
       screenshotLabel: '截图',
       createProjectTitle: '新建项目',
@@ -334,6 +370,20 @@ const messages: Record<SupportedLocale, WebMessages> = {
       createProjectCancel: '取消',
       projectUntitledFallback: '导入项目',
       openProject: (name) => `打开项目 ${name}`,
+      projectDetailAddScreenshot: '添加截图',
+      projectDetailBackToProjects: '返回项目列表',
+      projectDetailListTitle: '项目截图',
+      projectDetailListDescription: '悬浮预览，点击整行进入编辑页',
+      projectDetailScreenshotCount: (count) => `${count} 张截图`,
+      projectDetailProgressLabel: '项目整体进度',
+      projectDetailShareLabel: '当前截图协作分享',
+      projectDetailSharePrivate: '仅限自己',
+      projectDetailSharePublic: '对外公开',
+      projectDetailShareCopy: '复制链接',
+      projectDetailShareEnable: '开启本图的外部协作链接',
+      projectDetailShareUnavailable: '可在编辑页中开启分享链接。',
+      projectDetailShareHint: (name) => `提示：你可以单独开启某张截图的分享权限。当前：${name}`,
+      projectDetailScreenshotFallback: (index) => `截图 ${String(index + 1).padStart(2, '0')}`,
       recentDraftsTitle: '最近草稿',
       recentDraftsDescription: '无需重新上传图片，继续之前的编辑。',
       noDrafts: '还没有草稿。',

@@ -1,4 +1,6 @@
+import { motion } from 'motion/react';
 import { LocalePreferenceButton } from '@/components/editor/LocalePreferenceButton';
+import { routeSharedLayoutIds, routeSharedTransition } from '@/components/motion/routeTransition';
 import type { ProjectSummary } from '@/lib/persistence';
 import { useLocale } from '@/lib/locale';
 
@@ -181,9 +183,19 @@ export function EditorHomepage({
 
             <div className="mf-homepage-back-layer" aria-hidden="true" />
 
-            <article data-testid="homepage-workbench-panel" className="mf-homepage-main-card">
+            <motion.article
+              layoutId={routeSharedLayoutIds.primarySurface}
+              transition={routeSharedTransition}
+              data-testid="homepage-workbench-panel"
+              className="mf-homepage-main-card"
+            >
               <div className="mf-homepage-card-head">
-                <div data-testid="homepage-latest-project-card" className="mf-homepage-head-row">
+                <motion.div
+                  layoutId={routeSharedLayoutIds.latestProject}
+                  transition={routeSharedTransition}
+                  data-testid="homepage-latest-project-card"
+                  className="mf-homepage-head-row"
+                >
                   <div className="mf-homepage-meta">
                     <div className="mf-homepage-meta-line">
                       <span className="mf-homepage-latest">{copy.latest}</span>
@@ -203,9 +215,14 @@ export function EditorHomepage({
                       <ArrowIcon />
                     </button>
                   ) : null}
-                </div>
+                </motion.div>
 
-                <div data-testid="homepage-preview-stage" className="mf-homepage-preview">
+                <motion.div
+                  layoutId={routeSharedLayoutIds.previewStage}
+                  transition={routeSharedTransition}
+                  data-testid="homepage-preview-stage"
+                  className="mf-homepage-preview"
+                >
                   <div className="mf-homepage-depth-panel mf-homepage-depth-panel-back" aria-hidden="true" />
                   <div className="mf-homepage-depth-panel mf-homepage-depth-panel-mid" aria-hidden="true" />
                   <div data-testid="homepage-preview-workspace" className="mf-homepage-workspace">
@@ -233,10 +250,15 @@ export function EditorHomepage({
                     </div>
                     <CursorIcon />
                   </div>
-                </div>
+                </motion.div>
               </div>
 
-              <div data-testid="homepage-active-projects" className="mf-homepage-card-foot">
+              <motion.div
+                layoutId={routeSharedLayoutIds.projectGrid}
+                transition={routeSharedTransition}
+                data-testid="homepage-active-projects"
+                className="mf-homepage-card-foot"
+              >
                 <div className="mf-homepage-foot-head">
                   <h4>{copy.activeProjects}</h4>
                   <div className="mf-homepage-msgs">
@@ -281,8 +303,8 @@ export function EditorHomepage({
                     </div>
                   )}
                 </div>
-              </div>
-            </article>
+              </motion.div>
+            </motion.article>
           </div>
         </section>
       </div>

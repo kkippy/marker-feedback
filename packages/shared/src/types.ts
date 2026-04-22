@@ -18,6 +18,7 @@ export interface ImageAsset {
   id: string;
   sourceType: AssetSourceType;
   imageDataUrl: string;
+  name?: string;
   width: number;
   height: number;
   x?: number;

@@ -52,7 +52,7 @@ export function CreateProjectDialog(props: {
               type="file"
               accept="image/*"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="block w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
+              className="block w-full rounded-2xl border border-dashed border-[#cfe1ff] bg-[#f7fbff] px-4 py-3 text-sm text-slate-600 transition file:mr-3 file:rounded-xl file:border-0 file:bg-[#348bff] file:px-3 file:py-2 file:text-sm file:font-medium file:text-white file:shadow-[0_10px_24px_rgba(52,139,255,0.28)] file:transition file:hover:bg-[#2f7de8] hover:border-[#b7d3ff]"
             />
           </label>
         </div>

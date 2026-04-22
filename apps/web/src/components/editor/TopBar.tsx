@@ -4,9 +4,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { motion } from 'motion/react';
 import type { AnnotationTool } from '@marker/shared';
 import { Download, House, MessageSquareMore, Save, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { routeSharedLayoutIds, routeSharedTransition } from '@/components/motion/routeTransition';
 import { ToolbarIconButton } from '@/components/ui/toolbar-icon-button';
 import { useLocale } from '@/lib/locale';
 import { LocalePreferenceButton } from './LocalePreferenceButton';
@@ -116,9 +118,13 @@ export function TopBar(props: {
         ) : null}
 
         {props.currentProjectName ? (
-          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600">
+          <motion.span
+            layoutId={routeSharedLayoutIds.currentProject}
+            transition={routeSharedTransition}
+            className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-600"
+          >
             {messages.topBar.currentProject(props.currentProjectName)}
-          </span>
+          </motion.span>
         ) : null}
 
         {props.activeTool ? (
