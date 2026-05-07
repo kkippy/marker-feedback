@@ -339,7 +339,7 @@ const loadDraftLocal = async (draftId: string | 'latest') => {
   const drafts = readDraftMap();
   const actualId =
     draftId === 'latest' ? window.localStorage.getItem(LATEST_DRAFT_KEY) : draftId;
-  return actualId ? normalizeDraft(drafts[actualId]) ?? null : null;
+  return actualId && drafts[actualId] ? normalizeDraft(drafts[actualId]) : null;
 };
 
 const listDraftPreviewsLocal = async () =>
@@ -352,6 +352,52 @@ const saveProjectLocal = async (project: ProjectItem) => {
   projects[project.id] = project;
   writeProjectMap(projects);
   return project;
+};
+
+const deleteProjectLocal = async (projectId: string) => {
+  const { drafts, projects } = await ensureProjectsForLegacyDraftsLocal();
+  const deletedDraftIds = new Set(
+    Object.values(drafts)
+      .filter((draft) => draft.projectId === projectId)
+      .map((draft) => draft.id),
+  );
+
+  if (projects[projectId]) {
+    delete projects[projectId];
+    writeProjectMap(projects);
+  }
+
+  if (deletedDraftIds.size) {
+    for (const draftId of deletedDraftIds) {
+      delete drafts[draftId];
+    }
+    writeDraftMap(drafts);
+
+    const latestDraftId = window.localStorage.getItem(LATEST_DRAFT_KEY);
+    if (latestDraftId && deletedDraftIds.has(latestDraftId)) {
+      const nextLatestDraft = Object.values(drafts).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+
+      if (nextLatestDraft) {
+        window.localStorage.setItem(LATEST_DRAFT_KEY, nextLatestDraft.id);
+      } else {
+        window.localStorage.removeItem(LATEST_DRAFT_KEY);
+      }
+    }
+
+    const shares = readJson<Record<string, ShareItem>>(SHARES_KEY, {});
+    let sharesChanged = false;
+
+    for (const [token, share] of Object.entries(shares)) {
+      if (deletedDraftIds.has(share.draft.id) || share.draft.projectId === projectId) {
+        delete shares[token];
+        sharesChanged = true;
+      }
+    }
+
+    if (sharesChanged) {
+      writeJson(SHARES_KEY, shares);
+    }
+  }
 };
 
 const loadProjectLocal = async (projectId: string) => {
@@ -608,6 +654,7 @@ export const saveDraft = async (draft: EditorDraft) => saveDraftLocal(draft);
 export const loadDraft = async (draftId: string | 'latest') => loadDraftLocal(draftId);
 export const listDraftPreviews = async () => listDraftPreviewsLocal();
 export const saveProject = async (project: ProjectItem) => saveProjectLocal(project);
+export const deleteProject = async (projectId: string) => deleteProjectLocal(projectId);
 export const loadProject = async (projectId: string) => loadProjectLocal(projectId);
 export const listProjects = async () => listProjectsLocal();
 export const listProjectDrafts = async (projectId: string) => listProjectDraftsLocal(projectId);

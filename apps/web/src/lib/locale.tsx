@@ -63,6 +63,8 @@ export interface WebMessages {
     projectListBackHome: string;
     projectListCreateProject: string;
     projectListMoreScreenshots: string;
+    projectListDeleteProject: (name: string) => string;
+    projectListDeleteConfirm: (name: string) => string;
     projectNameLabel: string;
     screenshotLabel: string;
     createProjectTitle: string;
@@ -206,6 +208,9 @@ const messages: Record<SupportedLocale, WebMessages> = {
       projectListBackHome: 'Back to home',
       projectListCreateProject: 'Create feedback project',
       projectListMoreScreenshots: 'More screenshots',
+      projectListDeleteProject: (name) => `Delete project ${name}`,
+      projectListDeleteConfirm: (name) =>
+        `Delete project "${name}"? This will remove all screenshots in it.`,
       projectNameLabel: 'Project name',
       screenshotLabel: 'Screenshot',
       createProjectTitle: 'Create a new project',
@@ -362,6 +367,8 @@ const messages: Record<SupportedLocale, WebMessages> = {
       projectListBackHome: '返回首页',
       projectListCreateProject: '新建项目',
       projectListMoreScreenshots: '更多截图',
+      projectListDeleteProject: (name) => `删除项目 ${name}`,
+      projectListDeleteConfirm: (name) => `确定删除项目“${name}”吗？这会移除其中的所有截图。`,
       projectNameLabel: '项目名称',
       screenshotLabel: '截图',
       createProjectTitle: '新建项目',

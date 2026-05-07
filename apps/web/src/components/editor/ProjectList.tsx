@@ -6,7 +6,7 @@
   type KeyboardEvent,
   type MouseEvent,
 } from 'react';
-import { Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import type { ProjectSummary } from '@/lib/persistence';
 import { useLocale } from '@/lib/locale';
 
@@ -289,12 +289,14 @@ function ProjectCard({
   onOpenDraft,
   onAddScreenshot,
   onRenameProject,
+  onDeleteProject,
 }: {
   project: ProjectSummary;
   onOpenProject: (projectId: string) => void;
   onOpenDraft?: (draftId: string) => void;
   onAddScreenshot?: (projectId: string, file: File) => void | Promise<void>;
   onRenameProject?: (projectId: string, name: string) => void | Promise<void>;
+  onDeleteProject?: (projectId: string) => void | Promise<void>;
 }) {
   const { locale, messages } = useLocale();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -310,6 +312,7 @@ function ProjectCard({
   const visualIndex = hoverIndex ?? activeIndex;
   const activeDotIndex = previewImages.length ? Math.min(visualIndex, previewImages.length - 1) : 0;
   const renameProjectLabel = locale === 'zh-CN' ? '重命名项目' : 'Rename project';
+  const titleTooltipId = `project-title-tooltip-${project.id}`;
   const formattedDate = (() => {
     const date = new Date(project.updatedAt);
 
@@ -323,6 +326,16 @@ function ProjectCard({
   const handleAddScreenshotClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     fileInputRef.current?.click();
+  };
+
+  const handleDeleteProject = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    if (!onDeleteProject || !window.confirm(messages.editor.projectListDeleteConfirm(projectName))) {
+      return;
+    }
+
+    await onDeleteProject(project.id);
   };
 
   const handleAddScreenshotChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -385,7 +398,7 @@ function ProjectCard({
 
       <div
         data-testid="project-fan-card"
-        className="w-[303px] border-slate-300/60 min-h-[356px] rounded-[34px] border border-white/50 bg-white/72 p-5 text-left text-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.10)] backdrop-blur-2xl"
+        className="relative w-[303px] border-slate-300/60 min-h-[356px] rounded-[34px] border border-white/50 bg-white/72 p-5 text-left text-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.10)]"
       >
         <ProjectFanStage
           project={project}
@@ -402,8 +415,11 @@ function ProjectCard({
 
         <div className="grid gap-5">
           <div className="grid gap-3">
-            <div className="grid grid-cols-3 items-center gap-3">
-              <div className="min-w-0">
+            <div
+              data-testid="project-card-action-row"
+              className="grid min-h-10 grid-cols-[minmax(0,1fr)_2.5rem_0.75rem_2.5rem_0.75rem_2.5rem_minmax(0,1fr)] items-center gap-0"
+            >
+              <div className="col-start-1 min-w-0 pr-3">
                 {isEditingTitle ? (
                   <input
                     value={draftProjectName}
@@ -416,47 +432,45 @@ function ProjectCard({
                     onClick={(event) => event.stopPropagation()}
                   />
                 ) : (
-                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+                  <div className="group/title relative min-w-0">
                     <h3
-                      title={projectName}
+                      tabIndex={0}
+                      aria-describedby={titleTooltipId}
                       className="min-w-0 truncate text-base font-black leading-tight tracking-[-0.035em]"
                     >
                       {projectName}
                     </h3>
-                    <button
-                      type="button"
-                      data-testid="project-rename-button"
-                      aria-label={renameProjectLabel}
-                      title={renameProjectLabel}
-                      className="grid size-4 place-items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/45"
-                      onClick={startTitleEditing}
-                    >
-                      <span className="text-blue-500 opacity-0 -translate-x-1 transition-all duration-200 group-hover/project-card:translate-x-0 group-hover/project-card:opacity-100">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </span>
-                    </button>
+                    <span
+                      id={titleTooltipId}
+                      role="tooltip"
+                      aria-label={projectName}
+                      data-testid="project-title-tooltip"
+                      data-tooltip={projectName}
+                      className="pointer-events-none absolute bottom-full left-0 z-40 mb-2 w-max max-w-[260px] rounded-xl border border-[#bfdbfe]/80 bg-white/95 px-3 py-2 text-xs font-bold leading-snug text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 before:block before:whitespace-normal before:break-words before:content-[attr(data-tooltip)] after:absolute after:left-4 after:top-full after:size-2 after:-translate-y-1/2 after:rotate-45 after:border-b after:border-r after:border-[#bfdbfe]/80 after:bg-white/95 group-hover/title:opacity-100 group-focus-within/title:opacity-100"
+                    />
                   </div>
+                )}
+              </div>
+              <div data-testid="project-title-actions" className="col-start-2 flex justify-center">
+                {isEditingTitle ? (
+                  <div aria-hidden="true" className="size-7" />
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="project-rename-button"
+                    aria-label={renameProjectLabel}
+                    className="grid size-7 place-items-center rounded-full border border-[#bfdbfe]/80 bg-[#eff6ff] text-[#5b8def] shadow-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/45"
+                    onClick={startTitleEditing}
+                  >
+                    <Pencil className="size-3.5 stroke-[2.4]" />
+                  </button>
                 )}
               </div>
               <button
                 type="button"
                 data-testid="project-add-screenshot-button"
                 aria-label={messages.editor.projectDetailAddScreenshot}
-                className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-lg shadow-blue-200 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/55"
+                className="col-start-4 flex size-10 items-center justify-center justify-self-center rounded-full bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-lg shadow-blue-200 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#348bff]/55"
                 onClick={handleAddScreenshotClick}
               >
                 <svg
@@ -475,7 +489,22 @@ function ProjectCard({
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
               </button>
-              <div className="flex justify-self-end gap-1" aria-hidden="true">
+              {onDeleteProject ? (
+                <button
+                  type="button"
+                  data-testid="project-delete-button"
+                  aria-label={messages.editor.projectListDeleteProject(projectName)}
+                  className="col-start-6 grid size-7 place-items-center justify-self-center rounded-full border border-rose-200/80 bg-rose-50/90 text-rose-400 shadow-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                  onClick={(event) => void handleDeleteProject(event)}
+                >
+                  <Trash2 className="size-3.5 stroke-[2.3]" />
+                </button>
+              ) : null}
+              <div
+                data-testid="project-pagination-controls"
+                className="col-start-7 flex w-10 items-center justify-start gap-1 pl-3"
+                aria-hidden="true"
+              >
                 {previewImages.slice(0, Math.min(screenshotCount, 3)).map((imageDataUrl, index) => (
                   <span
                     key={`${imageDataUrl}-${index}`}
@@ -519,6 +548,7 @@ export function ProjectList(props: {
   onCreateProject?: () => void;
   onAddScreenshot?: (projectId: string, file: File) => void | Promise<void>;
   onRenameProject?: (projectId: string, name: string) => void | Promise<void>;
+  onDeleteProject?: (projectId: string) => void | Promise<void>;
   className?: string;
 }) {
   return (
@@ -532,6 +562,7 @@ export function ProjectList(props: {
             onOpenDraft={props.onOpenDraft}
             onAddScreenshot={props.onAddScreenshot}
             onRenameProject={props.onRenameProject}
+            onDeleteProject={props.onDeleteProject}
           />
         ))}
 
@@ -540,4 +571,3 @@ export function ProjectList(props: {
     </div>
   );
 }
-

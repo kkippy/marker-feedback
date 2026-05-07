@@ -235,6 +235,9 @@ export function EditorPage() {
                 onOpenProject={(projectId) => {
                   navigate(`/projects/${projectId}`);
                 }}
+                onOpenDraft={(draftId) => {
+                  navigate(`/editor?sourceType=draft&draftId=${draftId}`);
+                }}
               />
               <CreateProjectDialog
                 open={isCreateProjectOpen}

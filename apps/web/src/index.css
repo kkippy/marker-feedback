@@ -606,7 +606,9 @@ textarea {
 
 .detail-list {
   display: grid;
+  grid-auto-rows: 86px;
   gap: 12px;
+  align-content: start;
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
@@ -643,6 +645,7 @@ textarea {
 
 .detail-item {
   display: flex;
+  height: 86px;
   justify-content: space-between;
   align-items: center;
   gap: 16px;

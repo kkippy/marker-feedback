@@ -105,6 +105,7 @@ interface EditorHomepageProps {
   onOpenLatestProject: () => void;
   onOpenProjects: () => void;
   onOpenProject: (projectId: string) => void;
+  onOpenDraft?: (draftId: string) => void;
 }
 
 export function EditorHomepage({
@@ -114,6 +115,7 @@ export function EditorHomepage({
   onOpenLatestProject,
   onOpenProjects,
   onOpenProject,
+  onOpenDraft,
 }: EditorHomepageProps) {
   const { locale, messages, formatDateTime } = useLocale();
   const copy = homepageStageCopy[locale];
@@ -279,7 +281,14 @@ export function EditorHomepage({
                           data-testid="homepage-active-project-tile"
                           className="mf-homepage-tile text-left"
                           aria-label={messages.editor.openProject(projectName)}
-                          onClick={() => onOpenProject(project.id)}
+                          onClick={() => {
+                            if (project.screenshotCount === 1 && project.latestDraftId && onOpenDraft) {
+                              onOpenDraft(project.latestDraftId);
+                              return;
+                            }
+
+                            onOpenProject(project.id);
+                          }}
                         >
                           <div className="mf-homepage-tile-icon">
                             <LayersIcon />

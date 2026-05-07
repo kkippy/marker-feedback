@@ -5,7 +5,7 @@ import { CreateProjectDialog } from '@/components/editor/CreateProjectDialog';
 import { ProjectList } from '@/components/editor/ProjectList';
 import { useLocale } from '@/lib/locale';
 import { addScreenshotToProjectFromFile, createProjectFromFile } from '@/lib/projectCreation';
-import { listProjects, saveProject, type ProjectSummary } from '@/lib/persistence';
+import { deleteProject, listProjects, saveProject, type ProjectSummary } from '@/lib/persistence';
 
 export function ProjectsPage() {
   const navigate = useNavigate();
@@ -103,6 +103,12 @@ export function ProjectsPage() {
                   ? { ...project, name: updatedProject.name, updatedAt: updatedProject.updatedAt }
                   : project,
               ),
+            );
+          }}
+          onDeleteProject={async (projectId) => {
+            await deleteProject(projectId);
+            setProjects((currentProjects) =>
+              currentProjects.filter((project) => project.id !== projectId),
             );
           }}
           onCreateProject={() => {
